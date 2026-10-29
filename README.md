@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MangaVerse 📖✨
 
-## Getting Started
+Usa ka modernong Web App para sa pagbasa, pag-search, pag-bookmark, ug pag-download sa mga **Manga (Japanese)**, **Manhwa (Korean Webtoons)**, ug **Manhua (Chinese Comics)** gamit ang libreng MangaDex API.
 
-First, run the development server:
+---
 
+## 🚀 Features
+
+- 🔍 **Live Search & Advanced Filters**:
+  - Filter sumala sa tipo: **🇯🇵 Manga**, **🇰🇷 Manhwa**, **🇨🇳 Manhua**.
+  - 70+ Genre & Theme tags (Action, Romance, Isekai, Fantasy, Martial Arts, Comedy, etc.).
+  - Status filter (Ongoing, Completed) ug Sort (Popularity, Latest, Rating).
+- 📖 **Immersive Manga & Webtoon Reader**:
+  - **Webtoon Mode**: Continuous vertical scroll (walay putol nga strip, perfect para sa Manhwa).
+  - **Single Page Mode**: Page-by-page reader nga naay Keyboard shortcuts (`←` / `→`, `A` / `D`, `F` para fullscreen) ug RTL (Right-to-Left) support.
+  - **Data Saver Mode**: Pag-toggle sa compressed images para tipid sa data.
+- 💾 **Personal Library & Bookmarks**:
+  - Kategoriya sa pag-save: *Currently Reading*, *Plan to Read*, *Completed*, *On Hold*, *Dropped*.
+  - I-backup ug i-restore ang imong bookmarks gamit ang JSON file.
+- ⏱️ **Reading History & Resume**:
+  - Awtomatikong ma-save kung asa ka nga chapter ug panid (page) ni-undang.
+  - "Continue Reading" shelf sa Home page para dali ma-resume.
+- 📥 **Offline Reading / CBZ Download**:
+  - Pwede nimo ma-download ang bisan unsang chapter isip `.cbz` (Comic Book Zip) file para mabasa bisan offline.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework**: [Next.js](https://nextjs.org/) (App Router + React 19)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Data Source**: [MangaDex REST API](https://api.mangadex.org/)
+- **Offline CBZ Packager**: JSZip + FileSaver
+
+---
+
+## 💻 Unsaon Pag-padagan (How to Run)
+
+Ablihi ang Terminal sulod sa folder:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd ~/Downloads/apps/manga
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 1. Development Mode (Live server):
+```bash
+npm run dev -- -p 3005
+```
+Dayon ablihi ang imong browser sa:
+👉 **[http://localhost:3005](http://localhost:3005)**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+*(Pwede usab kini ma-abli sa imong cellphone basta parehas mo og Wi-Fi gamit ang imong local network IP)*
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 2. Production Build:
+```bash
+npm run build
+npm run start -- -p 3005
+```

@@ -1,16 +1,18 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
+  // Allow MangaDex image domains if next/image is used
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'uploads.mangadex.org',
       },
-    },
+      {
+        protocol: 'https',
+        hostname: '*.mangadex.network',
+      },
+    ],
   },
 };
 
