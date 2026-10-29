@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/navigation';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BookOpen, Search, Bookmark, History, Home, Sparkles, Compass } from 'lucide-react';
-import { getBookmarks, getHistory } from '@/lib/storage';
+import { BookOpen, Search, Bookmark, Home, Compass } from 'lucide-react';
+import { getBookmarks } from '@/lib/storage';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -40,7 +40,7 @@ export default function Navbar() {
       <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           {/* Logo */}
-          <a
+          <Link
             href="/"
             className="flex items-center gap-2.5 group cursor-pointer focus:outline-none"
           >
@@ -57,7 +57,7 @@ export default function Navbar() {
                 Manga • Manhwa • Manhua
               </span>
             </div>
-          </a>
+          </Link>
 
           {/* Desktop Search Bar */}
           <form
@@ -80,7 +80,7 @@ export default function Navbar() {
               const Icon = link.icon;
               const isActive = pathname === link.href;
               return (
-                <a
+                <Link
                   key={link.href}
                   href={link.href}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition duration-150 relative ${
@@ -96,7 +96,7 @@ export default function Navbar() {
                       {link.badge}
                     </span>
                   )}
-                </a>
+                </Link>
               );
             })}
           </nav>
@@ -109,7 +109,7 @@ export default function Navbar() {
           const Icon = link.icon;
           const isActive = pathname === link.href;
           return (
-            <a
+            <Link
               key={link.href}
               href={link.href}
               className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-medium transition ${
@@ -125,11 +125,10 @@ export default function Navbar() {
                 )}
               </div>
               <span>{link.label}</span>
-            </a>
+            </Link>
           );
         })}
       </div>
     </>
   );
 }
-

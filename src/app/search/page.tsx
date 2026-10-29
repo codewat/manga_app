@@ -76,14 +76,52 @@ function SearchPageContent() {
           params.set('tags', selectedTags.join(','));
         }
 
-        const res = await fetch(`/api/manga?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (!isCancelled) {
-            setResults(data.items || []);
-            setTotal(data.total || 0);
-            setHasMore((page * 20) < (data.total || 0));
+        let data: any = null;
+        try {
+          const res = await fetch(`/api/manga?${params.toString()}`);
+          if (res.ok) {
+            data = await res.json();
           }
+        } catch {
+          // Fall through to direct fetch
+        }
+
+        // Direct fallback to MangaDex API if server route fails (e.g. cloud provider block)
+        if (!data || !data.items) {
+          const directParams = new URLSearchParams();
+          directParams.set('limit', '20');
+          directParams.set('offset', ((page - 1) * 20).toString());
+          directParams.append('includes[]', 'cover_art');
+          directParams.append('includes[]', 'author');
+          directParams.append('includes[]', 'artist');
+          directParams.append('contentRating[]', 'safe');
+          directParams.append('contentRating[]', 'suggestive');
+          if (query.trim()) directParams.set('title', query.trim());
+          if (type === 'manga') directParams.append('originalLanguage[]', 'ja');
+          if (type === 'manhwa') directParams.append('originalLanguage[]', 'ko');
+          if (type === 'manhua') {
+            directParams.append('originalLanguage[]', 'zh');
+            directParams.append('originalLanguage[]', 'zh-hk');
+          }
+          if (status !== 'all') directParams.append('status[]', status);
+          for (const t of selectedTags) directParams.append('includedTags[]', t);
+          directParams.append(`order[${sortBy}]`, sortBy === 'title' ? 'asc' : 'desc');
+
+          const directRes = await fetch(`https://api.mangadex.org/manga?${directParams.toString()}`);
+          if (directRes.ok) {
+            const json = await directRes.json();
+            const { parseMangaItem } = await import('@/lib/mangadex');
+            data = {
+              items: (json.data || []).map(parseMangaItem),
+              total: json.total || 0,
+            };
+          }
+        }
+
+        if (data && !isCancelled) {
+          setResults(data.items || []);
+          setTotal(data.total || 0);
+          setHasMore((page * 20) < (data.total || 0));
         }
       } catch (err) {
         console.error('Search error:', err);

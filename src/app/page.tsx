@@ -2,14 +2,13 @@ import React from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import HeroBanner from '@/components/HeroBanner';
-import MangaCard from '@/components/MangaCard';
+import MangaSection from '@/components/MangaSection';
 import ContinueReadingSection from '@/components/ContinueReadingSection';
 import { fetchMangaList } from '@/lib/mangadex';
-import { Flame, Sparkles, Compass, ChevronRight } from 'lucide-react';
-
+import { Flame, Sparkles, Compass } from 'lucide-react';
 
 export default async function HomePage() {
-  // Fetch trending/featured titles
+  // Fetch trending/featured titles (Server Side with empty fallback if blocked)
   const [featuredData, popularManhwaData, popularManhuaData, popularMangaData] = await Promise.all([
     fetchMangaList({ limit: 5, order: { followedCount: 'desc' } }).catch(() => ({ items: [] })),
     fetchMangaList({ limit: 10, type: 'manhwa', order: { followedCount: 'desc' } }).catch(() => ({ items: [] })),
@@ -60,76 +59,31 @@ export default async function HomePage() {
         </div>
 
         {/* SECTION 1: Trending Manhwa (Korean) */}
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Flame className="w-5 h-5 text-sky-400" />
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                Trending Manhwa (Webtoons)
-              </h2>
-            </div>
-            <Link
-              href="/search?type=manhwa"
-              className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1 transition"
-            >
-              See all <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-5">
-            {popularManhwaData.items.map((manga) => (
-              <MangaCard key={manga.id} manga={manga} />
-            ))}
-          </div>
-        </section>
+        <MangaSection
+          title="Trending Manhwa (Webtoons)"
+          type="manhwa"
+          icon={<Flame className="w-5 h-5 text-sky-400" />}
+          initialItems={popularManhwaData.items}
+          viewAllHref="/search?type=manhwa"
+        />
 
         {/* SECTION 2: Popular Japanese Manga */}
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-400" />
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                Popular Manga
-              </h2>
-            </div>
-            <Link
-              href="/search?type=manga"
-              className="text-xs font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1 transition"
-            >
-              See all <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-5">
-            {popularMangaData.items.map((manga) => (
-              <MangaCard key={manga.id} manga={manga} />
-            ))}
-          </div>
-        </section>
+        <MangaSection
+          title="Popular Manga"
+          type="manga"
+          icon={<Sparkles className="w-5 h-5 text-purple-400" />}
+          initialItems={popularMangaData.items}
+          viewAllHref="/search?type=manga"
+        />
 
         {/* SECTION 3: Top Manhua (Chinese) */}
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Flame className="w-5 h-5 text-emerald-400" />
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                Popular Manhua
-              </h2>
-            </div>
-            <Link
-              href="/search?type=manhua"
-              className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition"
-            >
-              See all <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-5">
-            {popularManhuaData.items.map((manga) => (
-              <MangaCard key={manga.id} manga={manga} />
-            ))}
-          </div>
-        </section>
+        <MangaSection
+          title="Popular Manhua"
+          type="manhua"
+          icon={<Flame className="w-5 h-5 text-emerald-400" />}
+          initialItems={popularManhuaData.items}
+          viewAllHref="/search?type=manhua"
+        />
       </main>
     </div>
   );

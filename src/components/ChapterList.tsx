@@ -52,13 +52,51 @@ export default function ChapterList({
     async function loadChapters() {
       setLoading(true);
       try {
-        const res = await fetch(
-          `/api/manga/${mangaId}/chapters?order=${order}&lang=${language}&limit=100`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setChapters(data.chapters || []);
+        let chaps: ChapterItem[] = [];
+        try {
+          const res = await fetch(
+            `/api/manga/${mangaId}/chapters?order=${order}&lang=${language}&limit=100`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            chaps = data.chapters || [];
+          }
+        } catch {
+          // Fall through
         }
+
+        // Direct fallback to MangaDex API if proxy/serverless fails
+        if (chaps.length === 0) {
+          const directRes = await fetch(
+            `https://api.mangadex.org/manga/${mangaId}/feed?limit=100&order[chapter]=${order}&translatedLanguage[]=en&includes[]=scanlation_group&contentRating[]=safe&contentRating[]=suggestive`
+          );
+          if (directRes.ok) {
+            const json = await directRes.json();
+            for (const item of json.data || []) {
+              const attrs = item.attributes || {};
+              const chapNum = attrs.chapter || '0';
+              let scanlationGroup = 'Unknown Group';
+              for (const rel of item.relationships || []) {
+                if (rel.type === 'scanlation_group' && rel.attributes?.name) {
+                  scanlationGroup = rel.attributes.name;
+                  break;
+                }
+              }
+              chaps.push({
+                id: item.id,
+                chapter: chapNum,
+                volume: attrs.volume || null,
+                title: attrs.title || `Chapter ${chapNum}`,
+                translatedLanguage: attrs.translatedLanguage || 'en',
+                publishAt: attrs.publishAt || attrs.createdAt,
+                pages: attrs.pages || 0,
+                scanlationGroup,
+              });
+            }
+          }
+        }
+
+        setChapters(chaps);
       } catch (err) {
         console.error('Failed to load chapters:', err);
       } finally {

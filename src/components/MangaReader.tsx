@@ -160,6 +160,24 @@ export default function MangaReader({
     router.push(`/read/${id}?mangaId=${mangaId}`);
   };
 
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage((p) => p + 1);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } else if (nextChapter) {
+      navigateToChapter(nextChapter.id);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage((p) => p - 1);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } else if (prevChapter) {
+      navigateToChapter(prevChapter.id);
+    }
+  };
+
   // Keyboard controls for page-by-page
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -183,24 +201,6 @@ export default function MangaReader({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [settings.direction, currentPage, totalPages]);
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage((p) => p + 1);
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    } else if (nextChapter) {
-      navigateToChapter(nextChapter.id);
-    }
-  };
-
-  const handlePrevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage((p) => p - 1);
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    } else if (prevChapter) {
-      navigateToChapter(prevChapter.id);
-    }
-  };
 
   // Track scroll position in webtoon mode to update current page number
   useEffect(() => {
