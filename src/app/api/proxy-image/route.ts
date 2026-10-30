@@ -10,24 +10,23 @@ export async function GET(request: NextRequest) {
 
   try {
     const parsed = new URL(imageUrl);
-    const allowedHosts = [
-      'uploads.mangadex.org',
-      'api.mangadex.org',
-    ];
+    const host = parsed.hostname.toLowerCase();
 
-    const isAllowed =
-      allowedHosts.includes(parsed.hostname) ||
-      parsed.hostname.endsWith('.mangadex.network') ||
-      parsed.hostname.endsWith('.mangadex.org');
-
-    if (!isAllowed) {
-      return new NextResponse('Forbidden domain', { status: 403 });
+    // Determine appropriate referer
+    let referer = 'https://mangadex.org/';
+    if (host.includes('readdetectiveconan') || host.includes('mangapill')) {
+      referer = 'https://mangapill.com/';
+    } else if (host.includes('planeptune') || host.includes('weebcentral') || host.includes('compsci88')) {
+      referer = 'https://weebcentral.com/';
+    } else if (host.includes('comick')) {
+      referer = 'https://comick.io/';
     }
 
     const response = await fetch(imageUrl, {
       headers: {
-        'User-Agent': 'MangaVerse-App/1.0',
-        'Referer': 'https://mangadex.org',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Referer: referer,
       },
     });
 
@@ -52,4 +51,3 @@ export async function GET(request: NextRequest) {
     return new NextResponse(err.message || 'Error fetching image', { status: 500 });
   }
 }
-

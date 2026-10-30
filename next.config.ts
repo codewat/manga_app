@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Allow MangaDex image domains if next/image is used
+  serverExternalPackages: ['@consumet/extensions', 'got-scraping'],
   images: {
     remotePatterns: [
       {

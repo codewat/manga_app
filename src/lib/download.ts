@@ -11,16 +11,27 @@ export interface DownloadProgressCallback {
 export async function downloadChapterAsCBZ(
   mangaTitle: string,
   chapter: ChapterItem,
-  onProgress?: DownloadProgressCallback
+  onProgress?: DownloadProgressCallback,
+  provider = 'mangadex'
 ): Promise<void> {
   try {
     if (onProgress) onProgress(5, 'Fetching chapter pages...');
 
-    const res = await fetch(`/api/chapter/${chapter.id}`);
-    if (!res.ok) throw new Error('Failed to retrieve chapter pages');
+    let pageUrls: string[] = [];
 
-    const data = await res.json();
-    const pageUrls: string[] = data.pages || [];
+    if (provider === 'mangadex') {
+      const res = await fetch(`/api/chapter/${chapter.id}`);
+      if (!res.ok) throw new Error('Failed to retrieve chapter pages');
+      const data = await res.json();
+      pageUrls = data.pages || [];
+    } else {
+      const res = await fetch(
+        `/api/source/${provider}?action=pages&chapterId=${encodeURIComponent(chapter.id)}`
+      );
+      if (!res.ok) throw new Error(`Failed to retrieve pages from ${provider}`);
+      const data = await res.json();
+      pageUrls = data.pages || [];
+    }
 
     if (pageUrls.length === 0) {
       throw new Error('No pages found for this chapter');
@@ -29,7 +40,7 @@ export async function downloadChapterAsCBZ(
     const zip = new JSZip();
     const cleanMangaTitle = mangaTitle.replace(/[\\/:*?"<>|]/g, '_');
     const cleanChapterTitle = `Ch.${chapter.chapter || '0'}`;
-    const filename = `${cleanMangaTitle} - ${cleanChapterTitle}.cbz`;
+    const filename = `${cleanMangaTitle} - ${cleanChapterTitle} [${provider.toUpperCase()}].cbz`;
 
     const total = pageUrls.length;
 
@@ -46,7 +57,6 @@ export async function downloadChapterAsCBZ(
       const imgRes = await fetch(proxyUrl);
       if (!imgRes.ok) {
         console.warn(`Failed to download page ${i + 1}, retrying directly...`);
-        // Retry direct
         const directRes = await fetch(pageUrl);
         if (!directRes.ok) continue;
         const blob = await directRes.blob();
@@ -72,4 +82,3 @@ export async function downloadChapterAsCBZ(
     throw err;
   }
 }
-

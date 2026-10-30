@@ -10,11 +10,14 @@ import {
   Download,
   Loader2,
   Calendar,
+  Layers,
+  Sparkles,
   ExternalLink,
 } from 'lucide-react';
 import { ChapterItem } from '@/types/manga';
 import { getHistoryItem } from '@/lib/storage';
 import { downloadChapterAsCBZ } from '@/lib/download';
+import { AVAILABLE_PROVIDERS, MangaProviderId } from '@/types/providers';
 
 interface ChapterListProps {
   mangaId: string;
@@ -23,18 +26,31 @@ interface ChapterListProps {
   type: string;
 }
 
+interface SourceMatch {
+  id: string;
+  title: string;
+  image?: string;
+  releaseDate?: string;
+}
+
 export default function ChapterList({
   mangaId,
   mangaTitle,
-  mangaCover,
-  type,
 }: ChapterListProps) {
+  // Active provider: mangadex | weebcentral | mangapill | comick
+  const [activeProvider, setActiveProvider] = useState<MangaProviderId>('mangadex');
+
+  // Chapters & loading state
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
-  const [language, setLanguage] = useState('en');
   const [lastReadChapterId, setLastReadChapterId] = useState<string | null>(null);
+
+  // External source matched manga list
+  const [sourceMatches, setSourceMatches] = useState<SourceMatch[]>([]);
+  const [selectedSourceMangaId, setSelectedSourceMangaId] = useState<string | null>(null);
+  const [isSearchingSource, setIsSearchingSource] = useState(false);
 
   // Download state: { [chapterId]: { downloading: boolean, progress: number, status: string } }
   const [downloadStates, setDownloadStates] = useState<
@@ -48,63 +64,136 @@ export default function ChapterList({
     }
   }, [mangaId]);
 
+  // Load chapters when provider or selectedSourceMangaId changes
   useEffect(() => {
-    async function loadChapters() {
-      setLoading(true);
-      try {
-        let chaps: ChapterItem[] = [];
-        try {
-          const res = await fetch(
-            `/api/manga/${mangaId}/chapters?order=${order}&lang=${language}&limit=100`
-          );
-          if (res.ok) {
-            const data = await res.json();
-            chaps = data.chapters || [];
-          }
-        } catch {
-          // Fall through
-        }
+    let isCancelled = false;
 
-        // Direct fallback to MangaDex API if proxy/serverless fails
-        if (chaps.length === 0) {
-          const directRes = await fetch(
-            `https://api.mangadex.org/manga/${mangaId}/feed?limit=100&order[chapter]=${order}&translatedLanguage[]=en&includes[]=scanlation_group&contentRating[]=safe&contentRating[]=suggestive`
-          );
-          if (directRes.ok) {
-            const json = await directRes.json();
-            for (const item of json.data || []) {
-              const attrs = item.attributes || {};
-              const chapNum = attrs.chapter || '0';
-              let scanlationGroup = 'Unknown Group';
-              for (const rel of item.relationships || []) {
-                if (rel.type === 'scanlation_group' && rel.attributes?.name) {
-                  scanlationGroup = rel.attributes.name;
-                  break;
-                }
+    async function loadData() {
+      setLoading(true);
+
+      if (activeProvider === 'mangadex') {
+        try {
+          let chaps: ChapterItem[] = [];
+          try {
+            const res = await fetch(
+              `/api/manga/${mangaId}/chapters?order=${order}&lang=en&limit=100`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              chaps = data.chapters || [];
+            }
+          } catch {
+            // fallback direct
+          }
+
+          if (chaps.length === 0) {
+            const directRes = await fetch(
+              `https://api.mangadex.org/manga/${mangaId}/feed?limit=100&order[chapter]=${order}&translatedLanguage[]=en&includes[]=scanlation_group&contentRating[]=safe&contentRating[]=suggestive`
+            );
+            if (directRes.ok) {
+              const json = await directRes.json();
+              for (const item of json.data || []) {
+                const attrs = item.attributes || {};
+                const chapNum = attrs.chapter || '0';
+                chaps.push({
+                  id: item.id,
+                  chapter: chapNum,
+                  volume: attrs.volume || null,
+                  title: attrs.title || `Chapter ${chapNum}`,
+                  translatedLanguage: attrs.translatedLanguage || 'en',
+                  publishAt: attrs.publishAt || attrs.createdAt,
+                  pages: attrs.pages || 0,
+                  scanlationGroup: 'MangaDex',
+                });
               }
-              chaps.push({
-                id: item.id,
-                chapter: chapNum,
-                volume: attrs.volume || null,
-                title: attrs.title || `Chapter ${chapNum}`,
-                translatedLanguage: attrs.translatedLanguage || 'en',
-                publishAt: attrs.publishAt || attrs.createdAt,
-                pages: attrs.pages || 0,
-                scanlationGroup,
-              });
+            }
+          }
+
+          if (!isCancelled) {
+            setChapters(chaps);
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error('Failed to load MangaDex chapters:', err);
+          if (!isCancelled) setLoading(false);
+        }
+        return;
+      }
+
+      // External Provider: WeebCentral, MangaPill, or ComicK
+      try {
+        setIsSearchingSource(true);
+
+        // Step 1: Search provider if no specific match selected yet
+        let targetId = selectedSourceMangaId;
+
+        if (!targetId) {
+          const searchRes = await fetch(
+            `/api/source/${activeProvider}?action=search&q=${encodeURIComponent(mangaTitle)}`
+          );
+          if (searchRes.ok) {
+            const searchData = await searchRes.json();
+            const results: SourceMatch[] = searchData.results || [];
+            if (!isCancelled) setSourceMatches(results);
+
+            if (results.length > 0) {
+              targetId = results[0].id;
+              if (!isCancelled) setSelectedSourceMangaId(targetId);
             }
           }
         }
 
-        setChapters(chaps);
+        setIsSearchingSource(false);
+
+        if (!targetId) {
+          if (!isCancelled) {
+            setChapters([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // Step 2: Fetch chapters for the matched source ID
+        const chapRes = await fetch(
+          `/api/source/${activeProvider}?action=chapters&id=${encodeURIComponent(targetId)}`
+        );
+        if (chapRes.ok) {
+          const chapData = await chapRes.json();
+          let fetched: ChapterItem[] = chapData.chapters || [];
+
+          // Sort according to user preference
+          if (order === 'desc') {
+            fetched = fetched.sort((a, b) => parseFloat(b.chapter) - parseFloat(a.chapter));
+          } else {
+            fetched = fetched.sort((a, b) => parseFloat(a.chapter) - parseFloat(b.chapter));
+          }
+
+          if (!isCancelled) setChapters(fetched);
+        }
       } catch (err) {
-        console.error('Failed to load chapters:', err);
+        console.error(`Failed to load chapters from ${activeProvider}:`, err);
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setIsSearchingSource(false);
+          setLoading(false);
+        }
       }
     }
-    loadChapters();
-  }, [mangaId, order, language]);
+
+    loadData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeProvider, mangaId, mangaTitle, order, selectedSourceMangaId]);
+
+  // Handle provider switch
+  const handleSelectProvider = (provId: MangaProviderId) => {
+    if (provId === activeProvider) return;
+    setActiveProvider(provId);
+    setSelectedSourceMangaId(null);
+    setSourceMatches([]);
+  };
 
   const handleDownload = async (e: React.MouseEvent, chapter: ChapterItem) => {
     e.preventDefault();
@@ -118,12 +207,17 @@ export default function ChapterList({
     }));
 
     try {
-      await downloadChapterAsCBZ(mangaTitle, chapter, (progress, status) => {
-        setDownloadStates((prev) => ({
-          ...prev,
-          [chapter.id]: { downloading: true, progress, status },
-        }));
-      });
+      await downloadChapterAsCBZ(
+        mangaTitle,
+        chapter,
+        (progress, status) => {
+          setDownloadStates((prev) => ({
+            ...prev,
+            [chapter.id]: { downloading: true, progress, status },
+          }));
+        },
+        activeProvider
+      );
 
       setTimeout(() => {
         setDownloadStates((prev) => {
@@ -153,26 +247,95 @@ export default function ChapterList({
   });
 
   return (
-    <div className="mt-8 bg-zinc-900/40 rounded-2xl border border-zinc-800 p-4 sm:p-6">
-      {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
+    <div className="mt-8 bg-zinc-900/40 rounded-2xl border border-zinc-800 p-4 sm:p-6 shadow-xl">
+      {/* Provider / Source Selector Header */}
+      <div className="mb-6 p-4 rounded-xl bg-zinc-950/70 border border-zinc-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-purple-400" />
+            <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
+              Manga Source Provider
+            </span>
+          </div>
+          <span className="text-[11px] text-zinc-400">
+            If some chapters are missing or delayed, switch to another source below!
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {AVAILABLE_PROVIDERS.map((prov) => {
+            const isSelected = activeProvider === prov.id;
+            return (
+              <button
+                key={prov.id}
+                onClick={() => handleSelectProvider(prov.id)}
+                className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition ${
+                  isSelected
+                    ? 'bg-purple-600/20 border-purple-500 text-white shadow-md shadow-purple-600/10 ring-1 ring-purple-500'
+                    : 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-bold text-xs">{prov.name}</span>
+                  <span
+                    className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                      isSelected
+                        ? 'bg-purple-500 text-white'
+                        : 'bg-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    {prov.badge}
+                  </span>
+                </div>
+                <span className="text-[10px] text-zinc-500 mt-1 line-clamp-1">
+                  {prov.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Source Match Dropdown (for external providers when multiple titles found) */}
+        {activeProvider !== 'mangadex' && sourceMatches.length > 1 && (
+          <div className="mt-3 pt-3 border-t border-zinc-800/80 flex items-center gap-2">
+            <span className="text-xs text-zinc-400 font-medium shrink-0">Matched Title:</span>
+            <select
+              value={selectedSourceMangaId || ''}
+              onChange={(e) => setSelectedSourceMangaId(e.target.value)}
+              className="bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 flex-1 truncate"
+            >
+              {sourceMatches.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title} {m.releaseDate ? `(${m.releaseDate})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Chapter Controls & Search */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-purple-400" />
             Chapters ({chapters.length})
+            <span className="text-xs font-normal text-purple-300 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/40">
+              via {activeProvider.toUpperCase()}
+            </span>
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Select a chapter to read or download for offline access
+            Select a chapter to read or download offline (.cbz)
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Chapter Search */}
+          {/* Chapter Filter Input */}
           <div className="relative flex-1 sm:w-48">
             <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Filter chapters..."
+              placeholder="Search chapter..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-750 text-xs text-zinc-200 pl-8 pr-3 py-1.5 rounded-lg focus:outline-none focus:border-purple-500"
@@ -190,21 +353,35 @@ export default function ChapterList({
         </div>
       </div>
 
-      {/* Chapter List */}
-      {loading ? (
+      {/* Chapter List Area */}
+      {loading || isSearchingSource ? (
         <div className="py-16 flex flex-col items-center justify-center text-zinc-400 gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-          <span className="text-sm">Loading available chapters...</span>
+          <span className="text-sm">
+            {isSearchingSource
+              ? `Connecting to ${activeProvider.toUpperCase()}...`
+              : 'Fetching complete chapters...'}
+          </span>
         </div>
       ) : filteredChapters.length === 0 ? (
-        <div className="py-16 text-center text-zinc-500 text-sm">
-          No chapters found matching your filter.
+        <div className="py-16 text-center text-zinc-500 space-y-2">
+          <p className="text-base font-semibold text-zinc-400">
+            No chapters found on {activeProvider.toUpperCase()}
+          </p>
+          <p className="text-xs">
+            Try switching to another source (e.g. <strong>WeebCentral</strong> or <strong>MangaPill</strong>) above.
+          </p>
         </div>
       ) : (
         <div className="divide-y divide-zinc-800/60 max-h-[600px] overflow-y-auto pr-1 mt-2">
           {filteredChapters.map((chap) => {
             const isRead = chap.id === lastReadChapterId;
             const dlState = downloadStates[chap.id];
+
+            const readHref =
+              activeProvider === 'mangadex'
+                ? `/read/${encodeURIComponent(chap.id)}?mangaId=${mangaId}`
+                : `/read/${encodeURIComponent(chap.id)}?provider=${activeProvider}&mangaId=${mangaId}&title=${encodeURIComponent(mangaTitle)}`;
 
             return (
               <div
@@ -213,9 +390,9 @@ export default function ChapterList({
                   isRead ? 'bg-purple-950/20 border-l-2 border-purple-500 pl-3' : ''
                 }`}
               >
-                {/* Chapter Info & Read Link */}
+                {/* Chapter Info */}
                 <Link
-                  href={`/read/${chap.id}?mangaId=${mangaId}`}
+                  href={readHref}
                   className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 min-w-0 pr-4"
                 >
                   <div className="flex items-center gap-2">
@@ -242,13 +419,13 @@ export default function ChapterList({
                     {chap.publishAt && (
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {new Date(chap.publishAt).toLocaleDateString()}
+                        {chap.publishAt}
                       </span>
                     )}
                   </div>
                 </Link>
 
-                {/* Actions: Download CBZ */}
+                {/* Actions: Download & Read */}
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={(e) => handleDownload(e, chap)}
@@ -271,7 +448,7 @@ export default function ChapterList({
                   </button>
 
                   <Link
-                    href={`/read/${chap.id}?mangaId=${mangaId}`}
+                    href={readHref}
                     className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-lg shadow transition"
                   >
                     Read
@@ -285,4 +462,3 @@ export default function ChapterList({
     </div>
   );
 }
-

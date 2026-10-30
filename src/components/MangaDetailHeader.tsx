@@ -175,6 +175,17 @@ export default function MangaDetailHeader({ manga }: MangaDetailHeaderProps) {
             ))}
           </div>
 
+          {/* Multi-Source Notice */}
+          <div className="mt-3.5 flex items-center gap-2">
+            <a
+              href="#chapters-section"
+              className="text-[11px] font-semibold text-purple-300 hover:text-purple-200 bg-purple-950/40 hover:bg-purple-900/50 border border-purple-800/50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition"
+            >
+              <span>⚡</span>
+              <span>Multi-Source available: Switch to <strong>WeebCentral</strong>, <strong>MangaPill</strong>, or <strong>ComicK</strong> for complete chapters!</span>
+            </a>
+          </div>
+
           {/* Action Buttons: Read & Bookmark */}
           <div className="mt-6 flex flex-wrap items-center gap-3">
             {/* Resume or Start Reading */}

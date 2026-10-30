@@ -27,6 +27,7 @@ interface MangaReaderProps {
   mangaTitle?: string;
   mangaCover?: string;
   mangaType?: string;
+  provider?: string;
 }
 
 export default function MangaReader({
@@ -36,6 +37,7 @@ export default function MangaReader({
   mangaTitle = 'Manga',
   mangaCover = '',
   mangaType = 'manga',
+  provider = 'mangadex',
 }: MangaReaderProps) {
   const router = useRouter();
 
@@ -157,7 +159,9 @@ export default function MangaReader({
   const nextChapter = currentIndex >= 0 && currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null;
 
   const navigateToChapter = (id: string) => {
-    router.push(`/read/${id}?mangaId=${mangaId}`);
+    router.push(
+      `/read/${encodeURIComponent(id)}?mangaId=${mangaId}&provider=${provider}&title=${encodeURIComponent(mangaTitle)}`
+    );
   };
 
   const handleNextPage = () => {
@@ -231,6 +235,14 @@ export default function MangaReader({
   const getImageSrc = (pageUrl: string, idx: number) => {
     if (failedImages[idx]) {
       // Use proxy fallback
+      return `/api/proxy-image?url=${encodeURIComponent(pageUrl)}`;
+    }
+    if (
+      provider !== 'mangadex' &&
+      (pageUrl.includes('mangapill') ||
+        pageUrl.includes('readdetectiveconan') ||
+        pageUrl.includes('comick'))
+    ) {
       return `/api/proxy-image?url=${encodeURIComponent(pageUrl)}`;
     }
     return pageUrl;
