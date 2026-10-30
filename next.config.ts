@@ -1,7 +1,6 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['@consumet/extensions', 'got-scraping'],
   images: {
     remotePatterns: [
       {
@@ -11,6 +10,14 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: '*.mangadex.network',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.planeptune.us',
+      },
+      {
+        protocol: 'https',
+        hostname: 'weebcentral.com',
       },
     ],
   },

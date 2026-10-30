@@ -182,7 +182,7 @@ export default function MangaDetailHeader({ manga }: MangaDetailHeaderProps) {
               className="text-[11px] font-semibold text-purple-300 hover:text-purple-200 bg-purple-950/40 hover:bg-purple-900/50 border border-purple-800/50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition"
             >
               <span>⚡</span>
-              <span>Multi-Source available: Switch to <strong>WeebCentral</strong>, <strong>MangaPill</strong>, or <strong>ComicK</strong> for complete chapters!</span>
+              <span>Missing chapters? Switch to <strong>WeebCentral</strong> below for complete chapters!</span>
             </a>
           </div>
 

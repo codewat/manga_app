@@ -17,7 +17,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'search';
 
-    const validProviders: MangaProviderId[] = ['weebcentral', 'mangapill', 'comick'];
+    const validProviders: MangaProviderId[] = ['weebcentral'];
     if (!validProviders.includes(provider as MangaProviderId)) {
       return NextResponse.json({ error: 'Unsupported provider' }, { status: 400 });
     }

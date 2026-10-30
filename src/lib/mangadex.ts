@@ -5,6 +5,29 @@ const MANGADEX_API_BASE = 'https://api.mangadex.org';
 
 export const MANGA_TAGS = tagsData;
 
+// In-memory cache to avoid Next.js dev fetch-cache writing to disk (which causes infinite Turbopack HMR reloads)
+const apiCache = new Map<string, { data: any; expiry: number }>();
+
+async function cachedFetchJson(url: string, ttlMs = 120000) {
+  const now = Date.now();
+  const cached = apiCache.get(url);
+  if (cached && cached.expiry > now) {
+    return cached.data;
+  }
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'MangaVerse-App/1.0',
+    },
+  });
+  if (!res.ok) {
+    if (res.status === 404) return null;
+    throw new Error(`Failed to fetch from MangaDex: ${res.statusText}`);
+  }
+  const data = await res.json();
+  apiCache.set(url, { data, expiry: now + ttlMs });
+  return data;
+}
+
 export function mapOriginalLanguageToType(lang: string): MangaType {
   const l = (lang || '').toLowerCase();
   if (l === 'ko') return 'manhwa';
@@ -148,44 +171,21 @@ export async function fetchMangaList(options: FetchMangaOptions = {}) {
   }
 
   const url = `${MANGADEX_API_BASE}/manga?${params.toString()}`;
-  const res = await fetch(url, {
-    next: { revalidate: 120 }, // 2 min cache
-    headers: {
-      'User-Agent': 'MangaVerse-App/1.0',
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch manga list: ${res.statusText}`);
-  }
-
-  const json = await res.json();
-  const items: MangaItem[] = (json.data || []).map(parseMangaItem);
+  const json = await cachedFetchJson(url, 120000);
+  const items: MangaItem[] = (json?.data || []).map(parseMangaItem);
 
   return {
     items,
-    total: json.total || 0,
-    limit: json.limit || limit,
-    offset: json.offset || offset,
+    total: json?.total || 0,
+    limit: json?.limit || limit,
+    offset: json?.offset || offset,
   };
 }
 
 export async function fetchMangaById(id: string): Promise<MangaItem | null> {
   const url = `${MANGADEX_API_BASE}/manga/${id}?includes[]=cover_art&includes[]=author&includes[]=artist`;
-  const res = await fetch(url, {
-    next: { revalidate: 300 }, // 5 min cache
-    headers: {
-      'User-Agent': 'MangaVerse-App/1.0',
-    },
-  });
-
-  if (!res.ok) {
-    if (res.status === 404) return null;
-    throw new Error(`Failed to fetch manga details: ${res.statusText}`);
-  }
-
-  const json = await res.json();
-  if (!json.data) return null;
+  const json = await cachedFetchJson(url, 300000);
+  if (!json?.data) return null;
   return parseMangaItem(json.data);
 }
 
@@ -220,19 +220,8 @@ export async function fetchMangaChapters(
   }
 
   const url = `${MANGADEX_API_BASE}/manga/${mangaId}/feed?${params.toString()}`;
-  const res = await fetch(url, {
-    next: { revalidate: 180 }, // 3 min cache
-    headers: {
-      'User-Agent': 'MangaVerse-App/1.0',
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch chapters: ${res.statusText}`);
-  }
-
-  const json = await res.json();
-  const rawList = json.data || [];
+  const json = await cachedFetchJson(url, 180000);
+  const rawList = json?.data || [];
 
   // Deduplicate chapters if multiple groups translated same chapter
   // We keep the first one or latest
