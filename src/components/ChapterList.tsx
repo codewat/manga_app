@@ -11,13 +11,15 @@ import {
   Loader2,
   Calendar,
   Layers,
-  Sparkles,
-  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Star,
+  RotateCcw,
 } from 'lucide-react';
 import { ChapterItem } from '@/types/manga';
 import { getHistoryItem } from '@/lib/storage';
 import { downloadChapterAsCBZ } from '@/lib/download';
-import { AVAILABLE_PROVIDERS, MangaProviderId } from '@/types/providers';
+import { AVAILABLE_PROVIDERS, MangaProviderId, ProviderSource } from '@/types/providers';
 
 interface ChapterListProps {
   mangaId: string;
@@ -37,8 +39,80 @@ export default function ChapterList({
   mangaId,
   mangaTitle,
 }: ChapterListProps) {
-  // Active provider: mangadex | weebcentral | mangapill | comick
+  // Active providers list & preferred order
+  const [providers, setProviders] = useState<ProviderSource[]>(AVAILABLE_PROVIDERS);
   const [activeProvider, setActiveProvider] = useState<MangaProviderId>('mangadex');
+  const [isReordering, setIsReordering] = useState(false);
+
+  // Initialize preferred provider order & default active provider from localStorage
+  useEffect(() => {
+    try {
+      const savedOrder = localStorage.getItem('mangaverse_source_order');
+      const savedDefault = localStorage.getItem('mangaverse_default_source') as MangaProviderId | null;
+
+      let ordered = [...AVAILABLE_PROVIDERS];
+      if (savedOrder) {
+        const ids: MangaProviderId[] = JSON.parse(savedOrder);
+        ordered = [...AVAILABLE_PROVIDERS].sort((a, b) => {
+          const idxA = ids.indexOf(a.id);
+          const idxB = ids.indexOf(b.id);
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        });
+        setProviders(ordered);
+      }
+
+      if (savedDefault && AVAILABLE_PROVIDERS.some((p) => p.id === savedDefault)) {
+        setActiveProvider(savedDefault);
+      } else if (ordered.length > 0) {
+        setActiveProvider(ordered[0].id);
+      }
+    } catch {
+      // Ignore storage error
+    }
+  }, []);
+
+  const handleMoveProvider = (e: React.MouseEvent, index: number, direction: 'left' | 'right') => {
+    e.stopPropagation();
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= providers.length) return;
+
+    const next = [...providers];
+    const [moved] = next.splice(index, 1);
+    next.splice(targetIndex, 0, moved);
+
+    setProviders(next);
+    localStorage.setItem('mangaverse_source_order', JSON.stringify(next.map((p) => p.id)));
+
+    // If moved to first slot, automatically make it the default provider
+    if (targetIndex === 0) {
+      localStorage.setItem('mangaverse_default_source', moved.id);
+    }
+  };
+
+  const handleSetDefaultProvider = (e: React.MouseEvent, providerId: MangaProviderId) => {
+    e.stopPropagation();
+    const idx = providers.findIndex((p) => p.id === providerId);
+    if (idx !== -1) {
+      const next = [...providers];
+      const [item] = next.splice(idx, 1);
+      next.unshift(item);
+      setProviders(next);
+      localStorage.setItem('mangaverse_source_order', JSON.stringify(next.map((p) => p.id)));
+    }
+    localStorage.setItem('mangaverse_default_source', providerId);
+    setActiveProvider(providerId);
+    setSelectedSourceMangaId(null);
+    setSourceMatches([]);
+  };
+
+  const handleResetOrder = () => {
+    setProviders(AVAILABLE_PROVIDERS);
+    localStorage.removeItem('mangaverse_source_order');
+    localStorage.removeItem('mangaverse_default_source');
+    setActiveProvider(AVAILABLE_PROVIDERS[0].id);
+    setSelectedSourceMangaId(null);
+    setSourceMatches([]);
+  };
 
   // Chapters & loading state
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
@@ -256,41 +330,114 @@ export default function ChapterList({
             <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
               Manga Source Provider
             </span>
+            <span className="text-[10px] text-zinc-400 font-normal hidden md:inline">
+              (⭐ 1st source is your Default)
+            </span>
           </div>
-          <span className="text-[11px] text-zinc-400">
-            If some chapters are missing or delayed, switch to another source below!
-          </span>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsReordering(!isReordering)}
+              className={`text-xs px-2.5 py-1 rounded-lg border font-medium flex items-center gap-1.5 transition ${
+                isReordering
+                  ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
+                  : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800'
+              }`}
+            >
+              <ArrowDownUp className="w-3.5 h-3.5" />
+              <span>{isReordering ? 'Done Moving' : 'Reorder Sources'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleResetOrder}
+              title="Reset to default order"
+              className="text-xs p-1.5 rounded-lg border border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          {AVAILABLE_PROVIDERS.map((prov) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+          {providers.map((prov, idx) => {
             const isSelected = activeProvider === prov.id;
+            const isFirst = idx === 0;
+
             return (
-              <button
+              <div
                 key={prov.id}
                 onClick={() => handleSelectProvider(prov.id)}
-                className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition ${
+                className={`relative group flex flex-col justify-between p-3 rounded-xl border text-left cursor-pointer transition select-none ${
                   isSelected
-                    ? 'bg-purple-600/20 border-purple-500 text-white shadow-md shadow-purple-600/10 ring-1 ring-purple-500'
-                    : 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
+                    ? 'bg-purple-600/20 border-purple-500 text-white shadow-lg shadow-purple-600/10 ring-1 ring-purple-500'
+                    : 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850 hover:border-zinc-700'
                 }`}
               >
-                <div className="flex items-center justify-between w-full">
-                  <span className="font-bold text-xs">{prov.name}</span>
-                  <span
-                    className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                      isSelected
-                        ? 'bg-purple-500 text-white'
-                        : 'bg-zinc-800 text-zinc-400'
-                    }`}
-                  >
-                    {prov.badge}
-                  </span>
+                <div>
+                  <div className="flex items-center justify-between w-full mb-1">
+                    <span className="font-bold text-xs truncate flex items-center gap-1">
+                      {prov.name}
+                    </span>
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                        isSelected
+                          ? 'bg-purple-500 text-white'
+                          : 'bg-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {prov.badge}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 line-clamp-1">
+                    {prov.description}
+                  </p>
                 </div>
-                <span className="text-[10px] text-zinc-500 mt-1 line-clamp-1">
-                  {prov.description}
-                </span>
-              </button>
+
+                {/* Move & Default Controls Bar */}
+                <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-1">
+                    {isFirst ? (
+                      <span className="text-[9px] font-bold text-amber-400 flex items-center gap-0.5 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded">
+                        <Star className="w-2.5 h-2.5 fill-current" />
+                        1st (Default)
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => handleSetDefaultProvider(e, prov.id)}
+                        title="Make this the 1st / Default Source"
+                        className="text-[9px] font-medium text-zinc-400 hover:text-amber-300 hover:bg-amber-400/10 px-1.5 py-0.5 rounded border border-transparent hover:border-amber-400/20 transition flex items-center gap-1"
+                      >
+                        <Star className="w-2.5 h-2.5" />
+                        <span>Make 1st</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Left / Right Move Buttons */}
+                  <div className={`flex items-center gap-1 ${isReordering ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={(e) => handleMoveProvider(e, idx, 'left')}
+                      title="Move Left (make higher priority)"
+                      className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 disabled:pointer-events-none transition"
+                    >
+                      <ChevronLeft className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === providers.length - 1}
+                      onClick={(e) => handleMoveProvider(e, idx, 'right')}
+                      title="Move Right"
+                      className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 disabled:pointer-events-none transition"
+                    >
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
