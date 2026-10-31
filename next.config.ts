@@ -19,6 +19,22 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'weebcentral.com',
       },
+      {
+        protocol: 'https',
+        hostname: '*.asurascans.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.flamecomics.xyz',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.readdetectiveconan.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'mangapill.com',
+      },
     ],
   },
 };

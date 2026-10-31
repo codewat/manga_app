@@ -14,7 +14,11 @@ export async function GET(request: NextRequest) {
 
     // Determine appropriate referer
     let referer = 'https://mangadex.org/';
-    if (host.includes('readdetectiveconan') || host.includes('mangapill')) {
+    if (host.includes('asurascans') || host.includes('asura')) {
+      referer = 'https://asurascans.com/';
+    } else if (host.includes('flamecomics')) {
+      referer = 'https://flamecomics.xyz/';
+    } else if (host.includes('readdetectiveconan') || host.includes('mangapill')) {
       referer = 'https://mangapill.com/';
     } else if (host.includes('planeptune') || host.includes('weebcentral') || host.includes('compsci88')) {
       referer = 'https://weebcentral.com/';

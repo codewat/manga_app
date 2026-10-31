@@ -241,6 +241,8 @@ export default function MangaReader({
       provider !== 'mangadex' &&
       (pageUrl.includes('mangapill') ||
         pageUrl.includes('readdetectiveconan') ||
+        pageUrl.includes('asurascans') ||
+        pageUrl.includes('flamecomics') ||
         pageUrl.includes('comick'))
     ) {
       return `/api/proxy-image?url=${encodeURIComponent(pageUrl)}`;
