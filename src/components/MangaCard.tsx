@@ -8,9 +8,10 @@ import { getBookmark, saveBookmark, removeBookmark } from '@/lib/storage';
 
 interface MangaCardProps {
   manga: MangaItem;
+  customHref?: string;
 }
 
-export default function MangaCard({ manga }: MangaCardProps) {
+export default function MangaCard({ manga, customHref }: MangaCardProps) {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [imgSrc, setImgSrc] = useState(manga.coverUrl);
   const [imgError, setImgError] = useState(false);
@@ -74,7 +75,7 @@ export default function MangaCard({ manga }: MangaCardProps) {
 
   return (
     <div className="group relative flex flex-col rounded-xl overflow-hidden bg-zinc-900/60 border border-zinc-800/80 hover:border-purple-500/50 hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300">
-      <Link href={`/manga/${manga.id}`} className="block relative aspect-[2/3] w-full overflow-hidden bg-zinc-950">
+      <Link href={customHref || `/manga/${manga.id}`} className="block relative aspect-[2/3] w-full overflow-hidden bg-zinc-950">
         {/* Cover Image */}
         {!imgError ? (
           <img
@@ -136,7 +137,7 @@ export default function MangaCard({ manga }: MangaCardProps) {
 
       {/* Info Section */}
       <div className="p-3 flex flex-col flex-1 justify-between gap-1.5">
-        <Link href={`/manga/${manga.id}`}>
+        <Link href={customHref || `/manga/${manga.id}`}>
           <h3
             className="font-semibold text-sm text-zinc-100 group-hover:text-purple-300 transition-colors line-clamp-2 leading-snug"
             title={manga.title}

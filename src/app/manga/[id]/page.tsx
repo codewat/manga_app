@@ -5,21 +5,68 @@ import Navbar from '@/components/Navbar';
 import MangaDetailHeader from '@/components/MangaDetailHeader';
 import ChapterList from '@/components/ChapterList';
 import { fetchMangaById } from '@/lib/mangadex';
+import { MangaProviderId } from '@/types/providers';
+import { MangaItem } from '@/types/manga';
 import { ArrowLeft, BookOpen, AlertCircle } from 'lucide-react';
-
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{
+    provider?: string;
+    title?: string;
+    cover?: string;
+    type?: string;
+  }>;
 }
 
-export default async function MangaDetailPage({ params }: PageProps) {
+export default async function MangaDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const sParams = (await searchParams) || {};
+  const provider = (sParams.provider as MangaProviderId) || 'mangadex';
+  const customTitle = sParams.title || '';
+  const customCover = sParams.cover || '';
 
   if (!id) {
     notFound();
   }
 
-  const manga = await fetchMangaById(id);
+  const decodedId = decodeURIComponent(id);
+  let manga: MangaItem | null = null;
+
+  try {
+    manga = await fetchMangaById(decodedId);
+  } catch {
+    // Non-blocking fallback
+  }
+
+  // If not found in MangaDex or if opened directly from external provider
+  if (!manga && (customTitle || provider !== 'mangadex')) {
+    const formattedTitle =
+      customTitle ||
+      decodedId
+        .split('/')
+        .pop()
+        ?.replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase()) ||
+      decodedId;
+
+    manga = {
+      id: decodedId,
+      title: formattedTitle,
+      altTitles: [],
+      description: `Read ${formattedTitle} directly from ${provider.toUpperCase()}.\nAll complete chapters and high quality scans available below.`,
+      coverUrl: customCover || '/placeholder.png',
+      status: 'ongoing',
+      type: (sParams.type as any) || 'manhwa',
+      year: null,
+      contentRating: 'safe',
+      tags: [{ id: provider, name: provider.toUpperCase(), group: 'source' }],
+      authors: [provider.toUpperCase()],
+      artists: [provider.toUpperCase()],
+      originalLanguage: 'en',
+      updatedAt: new Date().toISOString(),
+    };
+  }
 
   if (!manga) {
     return (
@@ -32,10 +79,10 @@ export default async function MangaDetailPage({ params }: PageProps) {
             The requested title may have been removed or the ID is invalid.
           </p>
           <Link
-            href="/"
+            href="/search"
             className="mt-6 px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-semibold"
           >
-            Return to Home
+            Search on Other Sources
           </Link>
         </div>
       </div>
@@ -49,11 +96,11 @@ export default async function MangaDetailPage({ params }: PageProps) {
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 w-full">
         {/* Back navigation */}
         <Link
-          href="/"
+          href="/search"
           className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white mb-6 group transition"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          Back to Browse
+          Back to Search
         </Link>
 
         {/* Header Hero */}
@@ -77,10 +124,11 @@ export default async function MangaDetailPage({ params }: PageProps) {
             mangaTitle={manga.title}
             mangaCover={manga.coverUrl}
             type={manga.type}
+            initialProvider={provider !== 'mangadex' ? provider : undefined}
+            initialSourceMangaId={provider !== 'mangadex' ? decodedId : undefined}
           />
         </div>
       </main>
     </div>
   );
 }
-

@@ -26,6 +26,8 @@ interface ChapterListProps {
   mangaTitle: string;
   mangaCover: string;
   type: string;
+  initialProvider?: MangaProviderId;
+  initialSourceMangaId?: string;
 }
 
 interface SourceMatch {
@@ -38,10 +40,12 @@ interface SourceMatch {
 export default function ChapterList({
   mangaId,
   mangaTitle,
+  initialProvider,
+  initialSourceMangaId,
 }: ChapterListProps) {
   // Active providers list & preferred order
   const [providers, setProviders] = useState<ProviderSource[]>(AVAILABLE_PROVIDERS);
-  const [activeProvider, setActiveProvider] = useState<MangaProviderId>('mangadex');
+  const [activeProvider, setActiveProvider] = useState<MangaProviderId>(initialProvider || 'mangadex');
   const [isReordering, setIsReordering] = useState(false);
 
   // Initialize preferred provider order & default active provider from localStorage
@@ -61,7 +65,10 @@ export default function ChapterList({
         setProviders(ordered);
       }
 
-      if (savedDefault && AVAILABLE_PROVIDERS.some((p) => p.id === savedDefault)) {
+      if (initialProvider) {
+        setActiveProvider(initialProvider);
+        if (initialSourceMangaId) setSelectedSourceMangaId(initialSourceMangaId);
+      } else if (savedDefault && AVAILABLE_PROVIDERS.some((p) => p.id === savedDefault)) {
         setActiveProvider(savedDefault);
       } else if (ordered.length > 0) {
         setActiveProvider(ordered[0].id);
@@ -69,7 +76,7 @@ export default function ChapterList({
     } catch {
       // Ignore storage error
     }
-  }, []);
+  }, [initialProvider, initialSourceMangaId]);
 
   const handleMoveProvider = (e: React.MouseEvent, index: number, direction: 'left' | 'right') => {
     e.stopPropagation();
@@ -123,7 +130,9 @@ export default function ChapterList({
 
   // External source matched manga list
   const [sourceMatches, setSourceMatches] = useState<SourceMatch[]>([]);
-  const [selectedSourceMangaId, setSelectedSourceMangaId] = useState<string | null>(null);
+  const [selectedSourceMangaId, setSelectedSourceMangaId] = useState<string | null>(
+    initialSourceMangaId || (initialProvider && initialProvider !== 'mangadex' ? mangaId : null)
+  );
   const [isSearchingSource, setIsSearchingSource] = useState(false);
 
   // Download state: { [chapterId]: { downloading: boolean, progress: number, status: string } }
