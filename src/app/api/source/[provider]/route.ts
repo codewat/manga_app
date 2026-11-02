@@ -5,6 +5,7 @@ import {
   fetchProviderChapters,
   fetchProviderPages,
   fetchProviderLatest,
+  fetchProviderTrending,
 } from '@/lib/providers';
 
 export const runtime = 'nodejs';
@@ -33,6 +34,11 @@ export async function GET(
 
     if (action === 'latest') {
       const results = await fetchProviderLatest(providerId);
+      return NextResponse.json({ results });
+    }
+
+    if (action === 'trending' || action === 'popular') {
+      const results = await fetchProviderTrending(providerId);
       return NextResponse.json({ results });
     }
 

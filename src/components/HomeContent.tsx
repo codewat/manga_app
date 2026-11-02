@@ -2,13 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import HeroBanner from '@/components/HeroBanner';
 import MangaCard from '@/components/MangaCard';
 import { MangaItem, BookmarkItem, ChapterItem } from '@/types/manga';
 import { AVAILABLE_PROVIDERS, MangaProviderId, ProviderSource } from '@/types/providers';
 import { getBookmarks, detectProvider } from '@/lib/storage';
 import {
-  Star,
   Sparkles,
   Flame,
   Layers,
@@ -18,13 +16,6 @@ import {
   CheckCircle2,
   FolderHeart,
 } from 'lucide-react';
-
-interface HomeContentProps {
-  initialFeatured: MangaItem[];
-  initialPopularManhwa: MangaItem[];
-  initialPopularManga: MangaItem[];
-  initialPopularManhua: MangaItem[];
-}
 
 interface LatestMangaItem {
   id: string;
@@ -41,14 +32,9 @@ interface BookmarkUpdateInfo {
   unreadCount: number;
 }
 
-export default function HomeContent({
-  initialFeatured,
-  initialPopularManhwa,
-  initialPopularManga,
-  initialPopularManhua,
-}: HomeContentProps) {
-  // Primary Tabs: 'my-updates' (Default) | 'featured' | 'updated' | 'trending'
-  const [activeTab, setActiveTab] = useState<'my-updates' | 'featured' | 'updated' | 'trending'>('my-updates');
+export default function HomeContent() {
+  // Primary Tabs: 'my-updates' (Default) | 'updated' | 'trending'
+  const [activeTab, setActiveTab] = useState<'my-updates' | 'updated' | 'trending'>('my-updates');
 
   // Bookmarks & Update Tracking
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
@@ -56,14 +42,20 @@ export default function HomeContent({
   const [bookmarkUpdates, setBookmarkUpdates] = useState<Record<string, BookmarkUpdateInfo>>({});
   const [checkingUpdates, setCheckingUpdates] = useState(false);
 
-  // Updated Tab Source Provider state
+  // Source Provider state
   const [providers, setProviders] = useState<ProviderSource[]>(AVAILABLE_PROVIDERS);
+
+  // Updated Tab Source Provider state
   const [selectedSource, setSelectedSource] = useState<MangaProviderId>('asura');
   const [latestItems, setLatestItems] = useState<LatestMangaItem[]>([]);
   const [loadingLatest, setLoadingLatest] = useState(false);
+  const [latestCache, setLatestCache] = useState<Record<string, LatestMangaItem[]>>({});
 
-  // Trending Tab Sub-filter state
-  const [trendingType, setTrendingType] = useState<'all' | 'manhwa' | 'manga' | 'manhua'>('all');
+  // Trending Tab Source Provider state
+  const [selectedTrendingSource, setSelectedTrendingSource] = useState<MangaProviderId>('asura');
+  const [trendingItems, setTrendingItems] = useState<LatestMangaItem[]>([]);
+  const [loadingTrending, setLoadingTrending] = useState(false);
+  const [trendingCache, setTrendingCache] = useState<Record<string, LatestMangaItem[]>>({});
 
   // Load custom source preferences
   useEffect(() => {
@@ -84,8 +76,10 @@ export default function HomeContent({
 
       if (savedDefault && AVAILABLE_PROVIDERS.some((p) => p.id === savedDefault)) {
         setSelectedSource(savedDefault);
+        setSelectedTrendingSource(savedDefault);
       } else if (ordered.length > 0) {
         setSelectedSource(ordered[0].id);
+        setSelectedTrendingSource(ordered[0].id);
       }
     } catch {
       // Ignore
@@ -199,6 +193,11 @@ export default function HomeContent({
   useEffect(() => {
     if (activeTab !== 'updated') return;
 
+    if (latestCache[selectedSource]) {
+      setLatestItems(latestCache[selectedSource]);
+      return;
+    }
+
     let isCancelled = false;
     async function loadLatest() {
       setLoadingLatest(true);
@@ -207,7 +206,9 @@ export default function HomeContent({
         if (res.ok) {
           const data = await res.json();
           if (!isCancelled) {
-            setLatestItems(data.results || []);
+            const list = data.results || [];
+            setLatestItems(list);
+            setLatestCache((prev) => ({ ...prev, [selectedSource]: list }));
           }
         }
       } catch (err) {
@@ -221,9 +222,46 @@ export default function HomeContent({
     return () => {
       isCancelled = true;
     };
-  }, [activeTab, selectedSource]);
+  }, [activeTab, selectedSource, latestCache]);
+
+  // Fetch trending updates whenever 'trending' tab is active or selectedTrendingSource changes
+  useEffect(() => {
+    if (activeTab !== 'trending') return;
+
+    if (trendingCache[selectedTrendingSource]) {
+      setTrendingItems(trendingCache[selectedTrendingSource]);
+      return;
+    }
+
+    let isCancelled = false;
+    async function loadTrending() {
+      setLoadingTrending(true);
+      try {
+        const res = await fetch(`/api/source/${selectedTrendingSource}?action=trending`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!isCancelled) {
+            const list = data.results || [];
+            setTrendingItems(list);
+            setTrendingCache((prev) => ({ ...prev, [selectedTrendingSource]: list }));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load trending items:', err);
+      } finally {
+        if (!isCancelled) setLoadingTrending(false);
+      }
+    }
+
+    loadTrending();
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeTab, selectedTrendingSource, trendingCache]);
 
   const activeSourceObj = providers.find((p) => p.id === selectedSource) || providers[0];
+  const activeTrendingSourceObj =
+    providers.find((p) => p.id === selectedTrendingSource) || providers[0];
 
   // Calculate unread count total
   const unreadCountTotal = bookmarks.filter((b) => {
@@ -252,18 +290,10 @@ export default function HomeContent({
     });
   };
 
-  // Filter trending items based on sub-filter
-  const getTrendingList = () => {
-    if (trendingType === 'manhwa') return initialPopularManhwa;
-    if (trendingType === 'manga') return initialPopularManga;
-    if (trendingType === 'manhua') return initialPopularManhua;
-    return [...initialPopularManhwa, ...initialPopularManga, ...initialPopularManhua].slice(0, 20);
-  };
-
   return (
     <div className="w-full">
       {/* ======================================================== */}
-      {/* 4 PRIMARY BUTTONS: 1. My Updates | 2. Featured | 3. Updated | 4. Trending */}
+      {/* 3 PRIMARY BUTTONS: 1. My Updates | 2. Source Updates | 3. Trending */}
       {/* ======================================================== */}
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-zinc-900/80 backdrop-blur-md rounded-2xl border border-zinc-800 w-fit mb-8 shadow-xl">
         {/* 1st Button: My Updates (Default) */}
@@ -288,24 +318,7 @@ export default function HomeContent({
           )}
         </button>
 
-        {/* 2nd Button: Featured */}
-        <button
-          onClick={() => setActiveTab('featured')}
-          className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
-            activeTab === 'featured'
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30'
-              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/80'
-          }`}
-        >
-          <Star
-            className={`w-4 h-4 ${
-              activeTab === 'featured' ? 'text-amber-300 fill-amber-300' : 'text-zinc-400'
-            }`}
-          />
-          <span>Featured</span>
-        </button>
-
-        {/* 3rd Button: Updated (Source Releases) */}
+        {/* 2nd Button: Updated (Source Releases) */}
         <button
           onClick={() => setActiveTab('updated')}
           className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
@@ -320,17 +333,17 @@ export default function HomeContent({
           <span>Source Updates</span>
         </button>
 
-        {/* 4th Button: Trending */}
+        {/* 3rd Button: Trending */}
         <button
           onClick={() => setActiveTab('trending')}
           className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
             activeTab === 'trending'
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30'
+              ? 'bg-gradient-to-r from-orange-600 to-pink-600 text-white shadow-lg shadow-orange-600/30'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-800/80'
           }`}
         >
           <Flame
-            className={`w-4 h-4 ${activeTab === 'trending' ? 'text-orange-400' : 'text-zinc-400'}`}
+            className={`w-4 h-4 ${activeTab === 'trending' ? 'text-amber-300 fill-amber-300' : 'text-zinc-400'}`}
           />
           <span>Trending</span>
         </button>
@@ -400,13 +413,13 @@ export default function HomeContent({
                   onClick={() => setActiveTab('updated')}
                   className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md transition"
                 >
-                  Browse Latest on Asura
+                  Browse Source Updates
                 </button>
                 <button
-                  onClick={() => setActiveTab('featured')}
+                  onClick={() => setActiveTab('trending')}
                   className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition"
                 >
-                  View Featured Picks
+                  View Trending Manga
                 </button>
               </div>
             </div>
@@ -538,34 +551,7 @@ export default function HomeContent({
       )}
 
       {/* ======================================================== */}
-      {/* SECTION 2: FEATURED MANGA                                */}
-      {/* ======================================================== */}
-      {activeTab === 'featured' && (
-        <div className="space-y-8 animate-in fade-in duration-200">
-          {/* Top Hero Banner */}
-          {initialFeatured.length > 0 && <HeroBanner featured={initialFeatured} />}
-
-          {/* Featured Titles Grid */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-                <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-                Featured Picks
-              </h2>
-              <span className="text-xs text-zinc-400">Handpicked top rated stories</span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-5">
-              {initialFeatured.map((manga) => (
-                <MangaCard key={manga.id} manga={manga} />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* SECTION 3: UPDATED (SOURCE RELEASES WITH SOURCE SELECTOR)*/}
+      {/* SECTION 2: UPDATED (SOURCE RELEASES WITH SOURCE SELECTOR)*/}
       {/* ======================================================== */}
       {activeTab === 'updated' && (
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -703,36 +689,139 @@ export default function HomeContent({
       )}
 
       {/* ======================================================== */}
-      {/* SECTION 4: TRENDING MANGA                                */}
+      {/* SECTION 3: TRENDING (WITH SOURCE SELECTOR)               */}
       {/* ======================================================== */}
       {activeTab === 'trending' && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Quick Sub-Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              { id: 'all', label: '🔥 All Trending' },
-              { id: 'manhwa', label: '🇰🇷 Manhwa (Korean)' },
-              { id: 'manga', label: '🇯🇵 Manga (Japanese)' },
-              { id: 'manhua', label: '🇨🇳 Manhua (Chinese)' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setTrendingType(tab.id as any)}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold border transition ${
-                  trendingType === tab.id
-                    ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-600/20'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          {/* Trending Source Selector Bar */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 shadow-xl backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3.5">
+              <div className="flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-400" />
+                <h3 className="text-xs sm:text-sm font-extrabold text-white tracking-wide uppercase">
+                  Select Trending Source
+                </h3>
+              </div>
+              <span className="text-xs text-zinc-400">
+                Viewing trending from:{' '}
+                <strong className="text-orange-400 font-bold underline decoration-orange-500 underline-offset-4">
+                  {activeTrendingSourceObj?.name}
+                </strong>
+              </span>
+            </div>
+
+            {/* Source Buttons */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+              {providers.map((prov) => {
+                const isSelected = selectedTrendingSource === prov.id;
+                return (
+                  <button
+                    key={prov.id}
+                    onClick={() => setSelectedTrendingSource(prov.id)}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition text-left ${
+                      isSelected
+                        ? 'bg-orange-600/20 border-orange-500 text-white shadow-lg shadow-orange-600/20'
+                        : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:text-white hover:border-zinc-700'
+                    }`}
+                  >
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
+                        isSelected
+                          ? 'bg-orange-600 text-white'
+                          : 'bg-zinc-900 text-zinc-300'
+                      }`}
+                    >
+                      {prov.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold truncate leading-tight">
+                        {prov.name}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 truncate leading-tight">
+                        {prov.description}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-5">
-            {getTrendingList().map((manga) => (
-              <MangaCard key={manga.id} manga={manga} />
-            ))}
+          {/* Trending Grid */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-400" />
+                Trending on {activeTrendingSourceObj?.name}
+              </h2>
+              {loadingTrending && (
+                <div className="flex items-center gap-2 text-xs text-orange-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading trending...</span>
+                </div>
+              )}
+            </div>
+
+            {loadingTrending && trendingItems.length === 0 ? (
+              <div className="py-20 flex flex-col items-center justify-center text-center">
+                <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-3" />
+                <p className="text-xs text-zinc-400">
+                  Connecting to {activeTrendingSourceObj?.name} servers...
+                </p>
+              </div>
+            ) : trendingItems.length === 0 ? (
+              <div className="py-16 text-center text-zinc-500">
+                <p className="text-sm">No trending titles found for {activeTrendingSourceObj?.name}.</p>
+                <p className="text-xs mt-1">Try selecting another source above.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-5">
+                {trendingItems.map((item) => {
+                  const proxyCover = item.image
+                    ? `/api/proxy-image?url=${encodeURIComponent(item.image)}`
+                    : '/placeholder.png';
+
+                  const customManga: MangaItem = {
+                    id: item.id,
+                    title: item.title,
+                    altTitles: [],
+                    description: `Trending title on ${activeTrendingSourceObj?.name}`,
+                    coverUrl: item.image || proxyCover,
+                    status: 'ongoing',
+                    type:
+                      selectedTrendingSource === 'asura' || selectedTrendingSource === 'flame'
+                        ? 'manhwa'
+                        : 'manga',
+                    year: null,
+                    contentRating: 'safe',
+                    tags: [
+                      {
+                        id: selectedTrendingSource,
+                        name: activeTrendingSourceObj?.name || 'Source',
+                        group: 'source',
+                      },
+                    ],
+                    authors: [activeTrendingSourceObj?.name || 'Source'],
+                    artists: [activeTrendingSourceObj?.name || 'Source'],
+                    originalLanguage: 'en',
+                    updatedAt: new Date().toISOString(),
+                  };
+
+                  const targetHref = `/manga/${encodeURIComponent(item.id)}?provider=${selectedTrendingSource}&title=${encodeURIComponent(
+                    item.title
+                  )}&cover=${encodeURIComponent(item.image || proxyCover)}`;
+
+                  return (
+                    <MangaCard
+                      key={`${selectedTrendingSource}-${item.id}`}
+                      manga={customManga}
+                      customHref={targetHref}
+                      provider={selectedTrendingSource}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
