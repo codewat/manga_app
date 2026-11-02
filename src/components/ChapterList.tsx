@@ -40,6 +40,7 @@ interface SourceMatch {
 export default function ChapterList({
   mangaId,
   mangaTitle,
+  mangaCover = '',
   initialProvider,
   initialSourceMangaId,
 }: ChapterListProps) {
@@ -536,8 +537,8 @@ export default function ChapterList({
 
             const readHref =
               activeProvider === 'mangadex'
-                ? `/read/${encodeURIComponent(chap.id)}?mangaId=${mangaId}`
-                : `/read/${encodeURIComponent(chap.id)}?provider=${activeProvider}&mangaId=${mangaId}&title=${encodeURIComponent(mangaTitle)}`;
+                ? `/read/${encodeURIComponent(chap.id)}?mangaId=${encodeURIComponent(mangaId)}&cover=${encodeURIComponent(mangaCover)}`
+                : `/read/${encodeURIComponent(chap.id)}?provider=${activeProvider}&mangaId=${encodeURIComponent(mangaId)}&title=${encodeURIComponent(mangaTitle)}&cover=${encodeURIComponent(mangaCover)}`;
 
             return (
               <div

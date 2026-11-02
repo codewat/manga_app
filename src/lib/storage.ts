@@ -64,12 +64,37 @@ export function removeBookmark(mangaId: string): void {
   safeSetItem(STORAGE_KEYS.BOOKMARKS, filtered);
 }
 
-export function updateBookmarkProgress(mangaId: string, chapterId: string, chapterNumber: string): void {
+// Helper to detect provider from IDs if not explicitly set
+export function detectProvider(mangaId?: string, chapterId?: string, savedProvider?: string): string {
+  if (savedProvider && savedProvider !== 'mangadex') return savedProvider;
+  if (!mangaId) return savedProvider || 'mangadex';
+
+  if (chapterId?.includes('::chapter::') || mangaId.includes('asurascans') || mangaId.includes('asura')) {
+    return 'asura';
+  }
+  if (mangaId.startsWith('asura:')) return 'asura';
+  if (mangaId.startsWith('weebcentral:') || chapterId?.startsWith('01J')) return 'weebcentral';
+  if (mangaId.startsWith('flame:')) return 'flame';
+  if (mangaId.startsWith('mangapill:')) return 'mangapill';
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mangaId);
+  if (isUuid) return 'mangadex';
+
+  return savedProvider || 'asura';
+}
+
+export function updateBookmarkProgress(
+  mangaId: string,
+  chapterId: string,
+  chapterNumber: string,
+  provider?: string
+): void {
   const all = getBookmarks();
   const idx = all.findIndex((b) => b.mangaId === mangaId);
   if (idx >= 0) {
     all[idx].lastReadChapterId = chapterId;
     all[idx].lastReadChapterNumber = chapterNumber;
+    if (provider) all[idx].provider = provider;
     safeSetItem(STORAGE_KEYS.BOOKMARKS, all);
   }
 }

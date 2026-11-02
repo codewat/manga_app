@@ -23,6 +23,7 @@ import {
   getHistory,
   removeHistoryItem,
   clearHistory,
+  detectProvider,
 } from '@/lib/storage';
 
 function LibraryContent() {
@@ -265,65 +266,82 @@ function LibraryContent() {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {filteredBookmarks.map((b) => (
-                  <div
-                    key={b.mangaId}
-                    className="group relative flex flex-col rounded-xl overflow-hidden bg-zinc-900/80 border border-zinc-800 hover:border-purple-500/50 transition"
-                  >
-                    <Link
-                      href={`/manga/${b.mangaId}`}
-                      className="relative aspect-[2/3] w-full overflow-hidden bg-zinc-950"
-                    >
-                      <img
-                        src={b.coverUrl}
-                        alt={b.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                      />
-                      <div className="absolute top-2 left-2 z-10">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-900/90 text-purple-300 uppercase">
-                          {b.category.replace('_', ' ')}
-                        </span>
-                      </div>
-                    </Link>
+                {filteredBookmarks.map((b) => {
+                  const bProvider = detectProvider(b.mangaId, b.lastReadChapterId, b.provider);
+                  const mangaHref = `/manga/${encodeURIComponent(b.mangaId)}?provider=${bProvider}&title=${encodeURIComponent(
+                    b.title
+                  )}&cover=${encodeURIComponent(b.coverUrl)}&type=${b.type}`;
+                  const resumeHref = b.lastReadChapterId
+                    ? `/read/${encodeURIComponent(b.lastReadChapterId)}?mangaId=${encodeURIComponent(
+                        b.mangaId
+                      )}&provider=${bProvider}&title=${encodeURIComponent(b.title)}`
+                    : mangaHref;
 
-                    <div className="p-3 flex flex-col flex-1 justify-between gap-2">
+                  return (
+                    <div
+                      key={b.mangaId}
+                      className="group relative flex flex-col rounded-xl overflow-hidden bg-zinc-900/80 border border-zinc-800 hover:border-purple-500/50 transition"
+                    >
                       <Link
-                        href={`/manga/${b.mangaId}`}
-                        className="font-semibold text-xs text-zinc-100 hover:text-purple-300 line-clamp-2"
-                        title={b.title}
+                        href={mangaHref}
+                        className="relative aspect-[2/3] w-full overflow-hidden bg-zinc-950"
                       >
-                        {b.title}
+                        <img
+                          src={b.coverUrl}
+                          alt={b.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        />
+                        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-900/90 text-purple-300 uppercase">
+                            {b.category.replace('_', ' ')}
+                          </span>
+                          {bProvider && bProvider !== 'mangadex' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-900/90 text-purple-200 uppercase tracking-wider">
+                              {bProvider}
+                            </span>
+                          )}
+                        </div>
                       </Link>
 
-                      <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80">
-                        {b.lastReadChapterId ? (
-                          <Link
-                            href={`/read/${b.lastReadChapterId}?mangaId=${b.mangaId}`}
-                            className="text-[11px] font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1"
-                          >
-                            <Play className="w-3 h-3 fill-current" />
-                            Resume Ch. {b.lastReadChapterNumber}
-                          </Link>
-                        ) : (
-                          <Link
-                            href={`/manga/${b.mangaId}`}
-                            className="text-[11px] font-semibold text-zinc-400 hover:text-white"
-                          >
-                            Details
-                          </Link>
-                        )}
-
-                        <button
-                          onClick={() => removeBookmark(b.mangaId)}
-                          title="Remove bookmark"
-                          className="p-1 text-zinc-500 hover:text-red-400 rounded transition"
+                      <div className="p-3 flex flex-col flex-1 justify-between gap-2">
+                        <Link
+                          href={mangaHref}
+                          className="font-semibold text-xs text-zinc-100 hover:text-purple-300 line-clamp-2"
+                          title={b.title}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {b.title}
+                        </Link>
+
+                        <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80">
+                          {b.lastReadChapterId ? (
+                            <Link
+                              href={resumeHref}
+                              className="text-[11px] font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                            >
+                              <Play className="w-3 h-3 fill-current" />
+                              Resume Ch. {b.lastReadChapterNumber}
+                            </Link>
+                          ) : (
+                            <Link
+                              href={mangaHref}
+                              className="text-[11px] font-semibold text-zinc-400 hover:text-white"
+                            >
+                              Details
+                            </Link>
+                          )}
+
+                          <button
+                            onClick={() => removeBookmark(b.mangaId)}
+                            title="Remove bookmark"
+                            className="p-1 text-zinc-500 hover:text-red-400 rounded transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -342,62 +360,79 @@ function LibraryContent() {
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredHistory.map((item) => (
-                  <div
-                    key={item.mangaId}
-                    className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-purple-500/40 hover:bg-zinc-900 transition"
-                  >
-                    <div className="flex items-center gap-4 min-w-0 pr-4">
-                      {/* Thumbnail */}
-                      <Link
-                        href={`/read/${item.chapterId}?mangaId=${item.mangaId}`}
-                        className="w-12 h-16 rounded-lg overflow-hidden shrink-0 bg-zinc-950"
-                      >
-                        <img
-                          src={item.coverUrl}
-                          alt={item.title}
-                          className="w-full h-full object-cover"
-                        />
-                      </Link>
+                {filteredHistory.map((item) => {
+                  const hProvider = detectProvider(item.mangaId, item.chapterId, item.provider);
+                  const readHref = `/read/${encodeURIComponent(item.chapterId)}?mangaId=${encodeURIComponent(
+                    item.mangaId
+                  )}&provider=${hProvider}&title=${encodeURIComponent(item.title)}`;
+                  const mangaHref = `/manga/${encodeURIComponent(item.mangaId)}?provider=${hProvider}&title=${encodeURIComponent(
+                    item.title
+                  )}&cover=${encodeURIComponent(item.coverUrl)}&type=${item.type}`;
 
-                      {/* Info */}
-                      <div className="min-w-0">
+                  return (
+                    <div
+                      key={item.mangaId}
+                      className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-purple-500/40 hover:bg-zinc-900 transition"
+                    >
+                      <div className="flex items-center gap-4 min-w-0 pr-4">
+                        {/* Thumbnail */}
                         <Link
-                          href={`/manga/${item.mangaId}`}
-                          className="font-bold text-sm text-zinc-100 hover:text-purple-300 line-clamp-1"
+                          href={readHref}
+                          className="w-12 h-16 rounded-lg overflow-hidden shrink-0 bg-zinc-950"
                         >
-                          {item.title}
+                          <img
+                            src={item.coverUrl}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                          />
                         </Link>
-                        <p className="text-xs text-purple-400 font-semibold mt-0.5">
-                          Chapter {item.chapterNumber}{' '}
-                          {item.chapterTitle ? `• ${item.chapterTitle}` : ''}
-                        </p>
-                        <p className="text-[11px] text-zinc-500 mt-0.5">
-                          Page {item.page || 1} of {item.totalPages} • Last read{' '}
-                          {new Date(item.updatedAt).toLocaleDateString()}
-                        </p>
+
+                        {/* Info */}
+                        <div className="min-w-0">
+                          <Link
+                            href={mangaHref}
+                            className="font-bold text-sm text-zinc-100 hover:text-purple-300 line-clamp-1"
+                          >
+                            {item.title}
+                          </Link>
+                          <p className="text-xs text-purple-400 font-semibold mt-0.5 flex items-center gap-1.5">
+                            <span>
+                              Chapter {item.chapterNumber}{' '}
+                              {item.chapterTitle ? `• ${item.chapterTitle}` : ''}
+                            </span>
+                            {hProvider && hProvider !== 'mangadex' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-900/80 text-purple-200 uppercase">
+                                {hProvider}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-zinc-500 mt-0.5">
+                            Page {item.page || 1} of {item.totalPages} • Last read{' '}
+                            {new Date(item.updatedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Link
+                          href={readHref}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow transition"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Resume</span>
+                        </Link>
+
+                        <button
+                          onClick={() => removeHistoryItem(item.mangaId)}
+                          title="Delete from history"
+                          className="p-2 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Link
-                        href={`/read/${item.chapterId}?mangaId=${item.mangaId}`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow transition"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Resume</span>
-                      </Link>
-
-                      <button
-                        onClick={() => removeHistoryItem(item.mangaId)}
-                        title="Delete from history"
-                        className="p-2 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

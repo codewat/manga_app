@@ -13,30 +13,47 @@ interface ReadPageProps {
     mangaId?: string;
     provider?: string;
     title?: string;
+    cover?: string;
+    type?: string;
   }>;
 }
 
 export default async function ReadPage({ params, searchParams }: ReadPageProps) {
   const { chapterId } = await params;
-  const { mangaId = '', provider = 'mangadex', title = '' } = await searchParams;
+  const { mangaId = '', provider = 'mangadex', title = '', cover = '', type = '' } = await searchParams;
 
   if (!chapterId) {
     notFound();
   }
 
   const decodedChapterId = decodeURIComponent(chapterId);
+
+  // Auto-detect provider if wrongly defaulting to mangadex
+  let effectiveProvider = provider;
+  if (effectiveProvider === 'mangadex') {
+    if (decodedChapterId.includes('::chapter::') || mangaId.includes('asura')) {
+      effectiveProvider = 'asura';
+    } else if (mangaId.startsWith('weebcentral:') || /^[0-9A-Z]{26}$/.test(decodedChapterId)) {
+      effectiveProvider = 'weebcentral';
+    } else if (mangaId.startsWith('flame:')) {
+      effectiveProvider = 'flame';
+    } else if (mangaId.startsWith('mangapill:')) {
+      effectiveProvider = 'mangapill';
+    }
+  }
+
   let pagesData: ChapterPagesData;
 
   try {
-    if (provider === 'mangadex') {
+    if (effectiveProvider === 'mangadex') {
       pagesData = await fetchChapterPages(decodedChapterId);
     } else {
       const pageUrls = await fetchProviderPages(
-        provider as MangaProviderId,
+        effectiveProvider as MangaProviderId,
         decodedChapterId
       );
       if (!pageUrls || pageUrls.length === 0) {
-        throw new Error(`No pages found on provider ${provider}`);
+        throw new Error(`No pages found on provider ${effectiveProvider}`);
       }
       pagesData = {
         chapterId: decodedChapterId,
@@ -47,18 +64,18 @@ export default async function ReadPage({ params, searchParams }: ReadPageProps) 
       };
     }
   } catch (err: any) {
-    console.error(`Error fetching chapter pages from ${provider}:`, err);
+    console.error(`Error fetching chapter pages from ${effectiveProvider}:`, err);
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 text-center">
         <AlertCircle className="w-12 h-12 text-red-400 mb-3" />
         <h2 className="text-xl font-bold text-white">Failed to Load Chapter</h2>
         <p className="text-sm text-zinc-400 mt-1 max-w-sm">
-          Could not load chapter pages from <strong>{provider.toUpperCase()}</strong>.
+          Could not load chapter pages from <strong>{effectiveProvider.toUpperCase()}</strong>.
         </p>
         <div className="flex gap-3 mt-6">
           {mangaId && (
             <Link
-              href={`/manga/${mangaId}`}
+              href={`/manga/${encodeURIComponent(mangaId)}?provider=${effectiveProvider}&title=${encodeURIComponent(title)}&cover=${encodeURIComponent(cover)}`}
               className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-semibold"
             >
               Back to Chapter List & Choose Other Source
@@ -76,15 +93,15 @@ export default async function ReadPage({ params, searchParams }: ReadPageProps) 
   }
 
   let mangaTitle = title || 'Manga Reader';
-  let mangaCover = '';
-  let mangaType = 'manga';
+  let mangaCover = cover || '';
+  let mangaType = type || 'manhwa';
 
-  if (mangaId) {
+  if (mangaId && effectiveProvider === 'mangadex') {
     try {
       const manga = await fetchMangaById(mangaId);
       if (manga) {
         if (!title) mangaTitle = manga.title;
-        mangaCover = manga.coverUrl;
+        if (!cover) mangaCover = manga.coverUrl;
         mangaType = manga.type;
       }
     } catch {
@@ -100,7 +117,7 @@ export default async function ReadPage({ params, searchParams }: ReadPageProps) 
       mangaTitle={mangaTitle}
       mangaCover={mangaCover}
       mangaType={mangaType}
-      provider={provider}
+      provider={effectiveProvider}
     />
   );
 }

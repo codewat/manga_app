@@ -510,6 +510,7 @@ function SearchPageContent() {
                     key={`${activeSource}-${item.id}`}
                     manga={customManga}
                     customHref={targetHref}
+                    provider={activeSource}
                   />
                 );
               })}

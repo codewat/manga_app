@@ -23,9 +23,10 @@ import {
 
 interface MangaDetailHeaderProps {
   manga: MangaItem;
+  provider?: string;
 }
 
-export default function MangaDetailHeader({ manga }: MangaDetailHeaderProps) {
+export default function MangaDetailHeader({ manga, provider }: MangaDetailHeaderProps) {
   const [bookmark, setBookmark] = useState<ReturnType<typeof getBookmark>>(null);
   const [lastHistory, setLastHistory] = useState<ReturnType<typeof getHistoryItem>>(null);
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
@@ -58,12 +59,18 @@ export default function MangaDetailHeader({ manga }: MangaDetailHeaderProps) {
   }, [showCategoryMenu]);
 
   const handleBookmarkCategory = (category: BookmarkCategory) => {
+    const effectiveProvider =
+      provider ||
+      manga.tags?.find((t) => t.group === 'source')?.id ||
+      'mangadex';
+
     saveBookmark({
       mangaId: manga.id,
       title: manga.title,
       coverUrl: manga.coverUrl,
       type: manga.type,
       category,
+      provider: effectiveProvider,
       addedAt: Date.now(),
     });
     setShowCategoryMenu(false);
@@ -209,7 +216,7 @@ export default function MangaDetailHeader({ manga }: MangaDetailHeaderProps) {
             {/* Resume or Start Reading */}
             {lastHistory ? (
               <Link
-                href={`/read/${lastHistory.chapterId}?mangaId=${manga.id}`}
+                href={`/read/${encodeURIComponent(lastHistory.chapterId)}?mangaId=${encodeURIComponent(manga.id)}&provider=${lastHistory.provider || provider || 'mangadex'}&title=${encodeURIComponent(manga.title)}`}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-purple-600/25 transition shrink-0"
               >
                 <Play className="w-4 h-4 fill-current" />

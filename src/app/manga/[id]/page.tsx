@@ -22,33 +22,55 @@ interface PageProps {
 export default async function MangaDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const sParams = (await searchParams) || {};
-  const provider = (sParams.provider as MangaProviderId) || 'mangadex';
-  const customTitle = sParams.title || '';
-  const customCover = sParams.cover || '';
 
   if (!id) {
     notFound();
   }
 
   const decodedId = decodeURIComponent(id);
-  let manga: MangaItem | null = null;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedId);
 
-  try {
-    manga = await fetchMangaById(decodedId);
-  } catch {
-    // Non-blocking fallback
+  // Auto-detect provider if missing from query params
+  let provider = (sParams.provider as MangaProviderId) || '';
+  if (!provider) {
+    if (decodedId.includes('::chapter::') || decodedId.startsWith('asura:') || decodedId.includes('asura')) {
+      provider = 'asura';
+    } else if (decodedId.startsWith('weebcentral:')) {
+      provider = 'weebcentral';
+    } else if (decodedId.startsWith('flame:')) {
+      provider = 'flame';
+    } else if (decodedId.startsWith('mangapill:')) {
+      provider = 'mangapill';
+    } else if (!isUuid) {
+      provider = 'asura';
+    } else {
+      provider = 'mangadex';
+    }
   }
 
-  // If not found in MangaDex or if opened directly from external provider
-  if (!manga && (customTitle || provider !== 'mangadex')) {
+  const customTitle = sParams.title || '';
+  const customCover = sParams.cover || '';
+  let manga: MangaItem | null = null;
+
+  if (provider === 'mangadex' && isUuid) {
+    try {
+      manga = await fetchMangaById(decodedId);
+    } catch {
+      // Non-blocking fallback
+    }
+  }
+
+  // If not found in MangaDex or if from external provider, construct manga gracefully
+  if (!manga) {
+    const rawName = decodedId.replace(/^(asura|weebcentral|flame|mangapill):/, '');
     const formattedTitle =
       customTitle ||
-      decodedId
+      rawName
         .split('/')
         .pop()
         ?.replace(/[-_]/g, ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase()) ||
-      decodedId;
+      rawName;
 
     manga = {
       id: decodedId,
@@ -104,7 +126,7 @@ export default async function MangaDetailPage({ params, searchParams }: PageProp
         </Link>
 
         {/* Header Hero */}
-        <MangaDetailHeader manga={manga} />
+        <MangaDetailHeader manga={manga} provider={provider} />
 
         {/* Synopsis & Summary Section */}
         <div className="mt-8 bg-zinc-900/40 rounded-2xl border border-zinc-800 p-6">

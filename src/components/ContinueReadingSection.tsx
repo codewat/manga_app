@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Play, Clock, X, ChevronRight } from 'lucide-react';
 import { HistoryItem } from '@/types/manga';
-import { getHistory, removeHistoryItem } from '@/lib/storage';
+import { getHistory, removeHistoryItem, detectProvider } from '@/lib/storage';
 
 export default function ContinueReadingSection() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -45,75 +45,85 @@ export default function ContinueReadingSection() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {history.map((item) => (
-          <div
-            key={item.mangaId}
-            className="group relative flex items-center gap-3.5 p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:border-purple-500/50 hover:bg-zinc-800/60 transition shadow-lg"
-          >
-            {/* Thumbnail */}
-            <Link
-              href={`/read/${item.chapterId}?mangaId=${item.mangaId}`}
-              className="relative w-16 h-22 rounded-lg overflow-hidden shrink-0 bg-zinc-950"
+        {history.map((item) => {
+          const itemProvider = detectProvider(item.mangaId, item.chapterId, item.provider);
+          const readHref = `/read/${encodeURIComponent(item.chapterId)}?mangaId=${encodeURIComponent(
+            item.mangaId
+          )}&provider=${itemProvider}&title=${encodeURIComponent(item.title)}`;
+          const mangaHref = `/manga/${encodeURIComponent(item.mangaId)}?provider=${itemProvider}&title=${encodeURIComponent(
+            item.title
+          )}&cover=${encodeURIComponent(item.coverUrl)}&type=${item.type}`;
+
+          return (
+            <div
+              key={item.mangaId}
+              className="group relative flex items-center gap-3.5 p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:border-purple-500/50 hover:bg-zinc-800/60 transition shadow-lg"
             >
-              <img
-                src={item.coverUrl}
-                alt={item.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-              />
-              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Play className="w-6 h-6 text-purple-400 fill-current" />
-              </div>
-            </Link>
-
-            {/* Details */}
-            <div className="flex-1 min-w-0 pr-6">
+              {/* Thumbnail */}
               <Link
-                href={`/manga/${item.mangaId}`}
-                className="text-xs font-semibold text-zinc-100 hover:text-purple-300 line-clamp-1 block"
-                title={item.title}
+                href={readHref}
+                className="relative w-16 h-22 rounded-lg overflow-hidden shrink-0 bg-zinc-950"
               >
-                {item.title}
-              </Link>
-
-              <p className="text-xs text-purple-400 font-medium mt-1">
-                Chapter {item.chapterNumber}
-              </p>
-
-              {item.totalPages > 0 && (
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex-1 bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className="bg-purple-500 h-full rounded-full"
-                      style={{
-                        width: `${Math.min(100, Math.round(((item.page || 1) / item.totalPages) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-zinc-500 font-mono">
-                    {item.page || 1}/{item.totalPages}
-                  </span>
+                <img
+                  src={item.coverUrl}
+                  alt={item.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                />
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Play className="w-6 h-6 text-purple-400 fill-current" />
                 </div>
-              )}
-
-              <Link
-                href={`/read/${item.chapterId}?mangaId=${item.mangaId}`}
-                className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-semibold text-zinc-200 bg-purple-600/30 hover:bg-purple-600 hover:text-white px-2.5 py-1 rounded transition"
-              >
-                <Play className="w-3 h-3 fill-current" />
-                Resume
               </Link>
-            </div>
 
-            {/* Remove button */}
-            <button
-              onClick={(e) => handleRemove(e, item.mangaId)}
-              title="Remove from history"
-              className="absolute top-2.5 right-2.5 p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
+              {/* Details */}
+              <div className="flex-1 min-w-0 pr-6">
+                <Link
+                  href={mangaHref}
+                  className="text-xs font-semibold text-zinc-100 hover:text-purple-300 line-clamp-1 block"
+                  title={item.title}
+                >
+                  {item.title}
+                </Link>
+
+                <p className="text-xs text-purple-400 font-medium mt-1">
+                  Chapter {item.chapterNumber}
+                </p>
+
+                {item.totalPages > 0 && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex-1 bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-purple-500 h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, Math.round(((item.page || 1) / item.totalPages) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {item.page || 1}/{item.totalPages}
+                    </span>
+                  </div>
+                )}
+
+                <Link
+                  href={readHref}
+                  className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-semibold text-zinc-200 bg-purple-600/30 hover:bg-purple-600 hover:text-white px-2.5 py-1 rounded transition"
+                >
+                  <Play className="w-3 h-3 fill-current" />
+                  Resume
+                </Link>
+              </div>
+
+              {/* Remove button */}
+              <button
+                onClick={(e) => handleRemove(e, item.mangaId)}
+                title="Remove from history"
+                className="absolute top-2.5 right-2.5 p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

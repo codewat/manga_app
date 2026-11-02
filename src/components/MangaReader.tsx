@@ -73,43 +73,85 @@ export default function MangaReader({
     }
   }, [mangaType]);
 
-  // Load chapters list for chapter dropdown
+  // Details URL preserves source provider, title, and cover
+  const detailsUrl = `/manga/${encodeURIComponent(mangaId)}?provider=${provider}&title=${encodeURIComponent(
+    mangaTitle
+  )}&cover=${encodeURIComponent(mangaCover)}&type=${mangaType}`;
+
+  // Load chapters list for chapter dropdown and next/prev navigation
   useEffect(() => {
     async function loadMangaChapters() {
       try {
-        const res = await fetch(`/api/manga/${mangaId}/chapters?order=asc&limit=100`);
+        let endpoint = `/api/manga/${encodeURIComponent(mangaId)}/chapters?order=asc&limit=100`;
+        if (provider && provider !== 'mangadex') {
+          endpoint = `/api/source/${provider}?action=chapters&id=${encodeURIComponent(mangaId)}`;
+        }
+        const res = await fetch(endpoint);
         if (res.ok) {
           const data = await res.json();
           const chaps: ChapterItem[] = data.chapters || [];
-          setChapters(chaps);
-          const found = chaps.find((c) => c.id === chapterId);
-          if (found) setCurrentChapter(found);
+
+          // Sort ascending so nextChapter (index+1) and prevChapter (index-1) are always correct!
+          const sorted = [...chaps].sort((a, b) => {
+            const numA = parseFloat(a.chapter) || 0;
+            const numB = parseFloat(b.chapter) || 0;
+            return numA - numB;
+          });
+
+          setChapters(sorted);
+          const found = sorted.find((c) => c.id === chapterId);
+          if (found) {
+            setCurrentChapter(found);
+          } else {
+            const match =
+              chapterId.match(/(?:chapter[-_:]*)(\d+(?:\.\d+)?)/i) ||
+              chapterId.match(/(\d+(?:\.\d+)?)/);
+            const chapNum = match ? match[1] : '1';
+            setCurrentChapter({
+              id: chapterId,
+              chapter: chapNum,
+              volume: null,
+              title: `Chapter ${chapNum}`,
+              translatedLanguage: 'en',
+              publishAt: new Date().toISOString(),
+              pages: totalPages,
+            });
+          }
         }
       } catch (e) {
         console.error('Failed to load sibling chapters:', e);
       }
     }
     if (mangaId) loadMangaChapters();
-  }, [mangaId, chapterId]);
+  }, [mangaId, chapterId, provider]);
 
   // Save reading progress to History and Bookmarks
   useEffect(() => {
-    if (!currentChapter) return;
+    let chapNum = currentChapter?.chapter;
+    if (!chapNum) {
+      const match =
+        chapterId.match(/(?:chapter[-_:]*)(\d+(?:\.\d+)?)/i) ||
+        chapterId.match(/(\d+(?:\.\d+)?)/);
+      chapNum = match ? match[1] : '1';
+    }
+    const chapTitle = currentChapter?.title || `Chapter ${chapNum}`;
+
     saveHistory({
       mangaId,
       title: mangaTitle,
       coverUrl: mangaCover,
       type: mangaType as any,
       chapterId,
-      chapterNumber: currentChapter.chapter || '0',
-      chapterTitle: currentChapter.title,
+      chapterNumber: chapNum,
+      chapterTitle: chapTitle,
       page: currentPage,
       totalPages,
       updatedAt: Date.now(),
+      provider,
     });
 
-    updateBookmarkProgress(mangaId, chapterId, currentChapter.chapter || '0');
-  }, [currentPage, chapterId, currentChapter, mangaId, mangaTitle, mangaCover, mangaType, totalPages]);
+    updateBookmarkProgress(mangaId, chapterId, chapNum, provider);
+  }, [currentPage, chapterId, currentChapter, mangaId, mangaTitle, mangaCover, mangaType, totalPages, provider]);
 
   // Fullscreen listener
   useEffect(() => {
@@ -160,7 +202,11 @@ export default function MangaReader({
 
   const navigateToChapter = (id: string) => {
     router.push(
-      `/read/${encodeURIComponent(id)}?mangaId=${mangaId}&provider=${provider}&title=${encodeURIComponent(mangaTitle)}`
+      `/read/${encodeURIComponent(id)}?mangaId=${encodeURIComponent(
+        mangaId
+      )}&provider=${provider}&title=${encodeURIComponent(mangaTitle)}&cover=${encodeURIComponent(
+        mangaCover
+      )}&type=${mangaType}`
     );
   };
 
@@ -269,7 +315,7 @@ export default function MangaReader({
       >
         <div className="flex items-center gap-3">
           <Link
-            href={`/manga/${mangaId}`}
+            href={detailsUrl}
             className="flex items-center gap-1.5 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 px-2.5 py-1.5 rounded-lg border border-zinc-800 transition"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -481,32 +527,50 @@ export default function MangaReader({
             ))}
 
             {/* Next Chapter Card at the end of vertical strip */}
-            <div className="w-full max-w-md my-12 p-6 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-center space-y-4">
-              <h3 className="font-bold text-white text-base">You finished Chapter {currentChapter?.chapter || '0'}!</h3>
-              <div className="flex items-center justify-center gap-3">
+            <div className="w-full max-w-lg my-12 p-6 sm:p-8 rounded-3xl bg-zinc-900/95 border border-zinc-800 text-center space-y-5 shadow-2xl">
+              <div className="space-y-1">
+                <span className="text-xs uppercase font-bold text-purple-400 tracking-wider">
+                  Chapter Complete
+                </span>
+                <h3 className="font-extrabold text-white text-lg sm:text-xl">
+                  You finished Chapter {currentChapter?.chapter || 'this chapter'}!
+                </h3>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                 {prevChapter && (
                   <button
                     onClick={() => navigateToChapter(prevChapter.id)}
-                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl transition"
+                    className="w-full sm:w-auto px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5"
                   >
-                    Previous Chapter
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Previous (Ch. {prevChapter.chapter})</span>
                   </button>
                 )}
+
                 {nextChapter ? (
                   <button
                     onClick={() => navigateToChapter(nextChapter.id)}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition"
+                    className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2 group"
                   >
-                    Next Chapter ({nextChapter.chapter})
+                    <span>Read Next Chapter ({nextChapter.chapter})</span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
                 ) : (
-                  <Link
-                    href={`/manga/${mangaId}`}
-                    className="px-4 py-2 bg-purple-600 text-white text-xs font-semibold rounded-xl"
-                  >
-                    Back to Manga Details
-                  </Link>
+                  <div className="w-full sm:w-auto px-4 py-2.5 bg-zinc-800/80 text-zinc-400 text-xs rounded-xl font-medium">
+                    You have reached the latest chapter!
+                  </div>
                 )}
+              </div>
+
+              <div className="pt-2 border-t border-zinc-800/80">
+                <Link
+                  href={detailsUrl}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to {mangaTitle} Overview</span>
+                </Link>
               </div>
             </div>
           </div>
@@ -588,7 +652,11 @@ export default function MangaReader({
           disabled={!nextChapter && currentPage >= totalPages}
           className="flex items-center gap-1 text-xs font-semibold text-zinc-300 hover:text-white disabled:opacity-30 disabled:pointer-events-none px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition"
         >
-          <span className="hidden sm:inline">Next</span>
+          <span className="hidden sm:inline">
+            {currentPage >= totalPages && nextChapter
+              ? `Next (Ch. ${nextChapter.chapter})`
+              : 'Next'}
+          </span>
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>

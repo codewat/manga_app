@@ -9,9 +9,10 @@ import { getBookmark, saveBookmark, removeBookmark } from '@/lib/storage';
 interface MangaCardProps {
   manga: MangaItem;
   customHref?: string;
+  provider?: string;
 }
 
-export default function MangaCard({ manga, customHref }: MangaCardProps) {
+export default function MangaCard({ manga, customHref, provider }: MangaCardProps) {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [imgSrc, setImgSrc] = useState(manga.coverUrl);
   const [imgError, setImgError] = useState(false);
@@ -37,12 +38,26 @@ export default function MangaCard({ manga, customHref }: MangaCardProps) {
       removeBookmark(manga.id);
       setIsBookmarked(false);
     } else {
+      const effectiveProvider =
+        provider ||
+        manga.tags?.find((t) => t.group === 'source')?.id ||
+        (manga.id.startsWith('weebcentral:')
+          ? 'weebcentral'
+          : manga.id.startsWith('asura:')
+          ? 'asura'
+          : manga.id.startsWith('flame:')
+          ? 'flame'
+          : manga.id.startsWith('mangapill:')
+          ? 'mangapill'
+          : 'mangadex');
+
       saveBookmark({
         mangaId: manga.id,
         title: manga.title,
         coverUrl: manga.coverUrl,
         type: manga.type,
         category: 'reading',
+        provider: effectiveProvider,
         addedAt: Date.now(),
       });
       setIsBookmarked(true);

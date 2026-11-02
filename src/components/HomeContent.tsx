@@ -292,6 +292,7 @@ export default function HomeContent({
                       key={`${selectedSource}-${item.id}`}
                       manga={customManga}
                       customHref={targetHref}
+                      provider={selectedSource}
                     />
                   );
                 })}

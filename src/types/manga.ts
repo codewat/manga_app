@@ -55,6 +55,7 @@ export interface BookmarkItem {
   type: MangaType;
   category: BookmarkCategory;
   addedAt: number;
+  provider?: string;
   lastReadChapterId?: string;
   lastReadChapterNumber?: string;
 }
@@ -70,6 +71,7 @@ export interface HistoryItem {
   page: number;
   totalPages: number;
   updatedAt: number;
+  provider?: string;
 }
 
 export type ReaderMode = 'webtoon' | 'single' | 'double';
