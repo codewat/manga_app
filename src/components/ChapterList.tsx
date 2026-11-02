@@ -37,6 +37,35 @@ interface SourceMatch {
   releaseDate?: string;
 }
 
+function getCleanReleaseDate(publishAt?: string, title?: string): string {
+  if (publishAt && publishAt.trim()) {
+    if (publishAt.includes('T')) {
+      try {
+        const d = new Date(publishAt);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          });
+        }
+      } catch {}
+    }
+    return publishAt.trim();
+  }
+
+  if (title) {
+    const match = title.match(
+      /(\d+\s+(?:sec|second|min|minute|hour|hr|day|week|month|year)s?\s+ago|last\s+(?:week|month|year)|yesterday|today|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i
+    );
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  return '';
+}
+
 export default function ChapterList({
   mangaId,
   mangaTitle,
@@ -534,6 +563,7 @@ export default function ChapterList({
           {filteredChapters.map((chap) => {
             const isRead = chap.id === lastReadChapterId;
             const dlState = downloadStates[chap.id];
+            const releaseDate = getCleanReleaseDate(chap.publishAt, chap.title);
 
             const readHref =
               activeProvider === 'mangadex'
@@ -563,20 +593,14 @@ export default function ChapterList({
                     </span>
                   </div>
 
-                  {chap.title && chap.title !== `Chapter ${chap.chapter}` && (
-                    <span className="text-xs text-zinc-400 truncate max-w-sm">
-                      {chap.title}
-                    </span>
-                  )}
-
                   <div className="flex items-center gap-3 text-[11px] text-zinc-500 sm:ml-auto">
                     {chap.scanlationGroup && (
                       <span className="truncate max-w-[150px]">{chap.scanlationGroup}</span>
                     )}
-                    {chap.publishAt && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {chap.publishAt}
+                    {releaseDate && (
+                      <span className="flex items-center gap-1 text-zinc-400">
+                        <Calendar className="w-3 h-3 text-zinc-500" />
+                        {releaseDate}
                       </span>
                     )}
                   </div>

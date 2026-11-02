@@ -353,7 +353,7 @@ export default function MangaReader({
               {mangaTitle}
             </h1>
             <p className="text-xs text-purple-400 font-medium">
-              Chapter {currentChapter?.chapter || '0'} {currentChapter?.title ? `• ${currentChapter.title}` : ''}
+              Chapter {currentChapter?.chapter || '0'}
             </p>
           </div>
         </div>

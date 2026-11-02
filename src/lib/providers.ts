@@ -240,17 +240,25 @@ export async function fetchProviderChapters(
         const href = $(el).attr('href') || '';
         const parts = href.split('/chapter/');
         const chapNum = parts[1]?.split('/')[0]?.split('?')[0] || '0';
-        const text = $(el).text().trim();
+        const rawText = $(el).text().trim();
         const id = `${cleanSlug}::chapter::${chapNum}`;
+
+        let publishDate = '';
+        const dateMatch = rawText.match(
+          /(\d+\s+(?:sec|min|minute|hour|day|week|month|year)s?\s+ago|last\s+(?:week|month|year)|yesterday|today|[A-Za-z]{3}\s+\d{1,2},?\s+\d{4})/i
+        );
+        if (dateMatch) {
+          publishDate = dateMatch[1].trim();
+        }
 
         if (!chapters.some((c) => c.id === id)) {
           chapters.push({
             id,
             chapter: chapNum,
             volume: null,
-            title: text || `Chapter ${chapNum}`,
+            title: `Chapter ${chapNum}`,
             translatedLanguage: 'en',
-            publishAt: '',
+            publishAt: publishDate,
             pages: 0,
             scanlationGroup: 'ASURA SCANS',
           });
@@ -285,13 +293,19 @@ export async function fetchProviderChapters(
         const hash = href.split(`/series/${seriesId}/`)[1]?.split('?')[0];
         if (!hash) return;
 
-        const text = $(el).text().trim();
+        const rawText = $(el).text().trim();
         let chapNum = '0';
         const match =
-          text.match(/chapter\s*([\d.]+)/i) ||
-          text.match(/ch\.\s*([\d.]+)/i) ||
-          text.match(/([\d.]+)/);
+          rawText.match(/chapter\s*([\d.]+)/i) ||
+          rawText.match(/ch\.\s*([\d.]+)/i) ||
+          rawText.match(/([\d.]+)/);
         if (match) chapNum = match[1];
+
+        let publishDate = '';
+        const dateMatch = rawText.match(
+          /(\d+\s+(?:sec|min|minute|hour|day|week|month|year)s?\s+ago|last\s+(?:week|month|year)|yesterday|today|[A-Za-z]{3}\s+\d{1,2},?\s+\d{4})/i
+        );
+        if (dateMatch) publishDate = dateMatch[1].trim();
 
         const id = `${seriesId}::chapter::${hash}::num::${chapNum}`;
 
@@ -300,9 +314,9 @@ export async function fetchProviderChapters(
             id,
             chapter: chapNum,
             volume: null,
-            title: text || `Chapter ${chapNum}`,
+            title: `Chapter ${chapNum}`,
             translatedLanguage: 'en',
-            publishAt: '',
+            publishAt: publishDate,
             pages: 0,
             scanlationGroup: 'FLAME COMICS',
           });
