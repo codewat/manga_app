@@ -5,8 +5,9 @@ import {
   getBookmarks,
   getHistory,
   getReaderSettings,
-  saveBookmark,
-  saveHistory,
+  clearHistory,
+  removeHistoryItem,
+  removeBookmark,
 } from '@/lib/storage';
 import { BookmarkItem, HistoryItem } from '@/types/manga';
 import { auth, db, isFirebaseConfigured } from '@/lib/firebase';
@@ -49,6 +50,9 @@ interface AuthContextType {
   loginWithSyncCode: (code: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   syncNow: () => Promise<void>;
+  clearHistoryAndSync: () => Promise<void>;
+  removeHistoryItemAndSync: (mangaId: string) => Promise<void>;
+  removeBookmarkAndSync: (mangaId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -79,16 +83,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [lastSynced, setLastSynced] = useState<number | null>(null);
 
   const unsubscribeSnapshotRef = useRef<(() => void) | null>(null);
+  const isSyncingFromCloudRef = useRef(false);
 
-  // Merge server/cloud data into local storage
-  const mergeCloudToLocal = useCallback((serverBookmarks: BookmarkItem[], serverHistory: HistoryItem[]) => {
-    if (serverBookmarks && serverBookmarks.length > 0) {
-      serverBookmarks.forEach((b) => saveBookmark(b));
+  // Sync server/cloud data into local storage safely without re-adding deleted items
+  const mergeCloudToLocal = useCallback((serverBookmarks?: BookmarkItem[], serverHistory?: HistoryItem[]) => {
+    isSyncingFromCloudRef.current = true;
+    try {
+      if (Array.isArray(serverBookmarks)) {
+        localStorage.setItem('mangaverse_bookmarks_v1', JSON.stringify(serverBookmarks));
+      }
+      if (Array.isArray(serverHistory)) {
+        localStorage.setItem('mangaverse_history_v1', JSON.stringify(serverHistory));
+      }
+      window.dispatchEvent(new Event('mangaverse_storage_update'));
+    } catch (e) {
+      console.error('Error applying cloud sync to local storage:', e);
+    } finally {
+      setTimeout(() => {
+        isSyncingFromCloudRef.current = false;
+      }, 500);
     }
-    if (serverHistory && serverHistory.length > 0) {
-      serverHistory.forEach((h) => saveHistory(h));
-    }
-    window.dispatchEvent(new Event('mangaverse_storage_update'));
   }, []);
 
   // Push local data to Firestore if Firebase is active
@@ -216,6 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let debounceTimer: NodeJS.Timeout;
     const handleStorageChange = () => {
+      if (isSyncingFromCloudRef.current) return;
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         if (user.isFirebase && user.id) {
@@ -507,6 +522,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const clearHistoryAndSync = async () => {
+    clearHistory();
+    if (user?.isFirebase && user.id && db) {
+      try {
+        const userDocRef = doc(db, 'users', user.id);
+        await setDoc(userDocRef, { history: [], updatedAt: Date.now() }, { merge: true });
+        setLastSynced(Date.now());
+      } catch (err) {
+        console.error('Failed to clear history in Firestore:', err);
+      }
+    } else {
+      await syncNow();
+    }
+  };
+
+  const removeHistoryItemAndSync = async (mangaId: string) => {
+    removeHistoryItem(mangaId);
+    if (user?.isFirebase && user.id && db) {
+      try {
+        const updated = getHistory();
+        const userDocRef = doc(db, 'users', user.id);
+        await setDoc(userDocRef, { history: updated, updatedAt: Date.now() }, { merge: true });
+        setLastSynced(Date.now());
+      } catch (err) {
+        console.error('Failed to remove history item in Firestore:', err);
+      }
+    } else {
+      await syncNow();
+    }
+  };
+
+  const removeBookmarkAndSync = async (mangaId: string) => {
+    removeBookmark(mangaId);
+    if (user?.isFirebase && user.id && db) {
+      try {
+        const updated = getBookmarks();
+        const userDocRef = doc(db, 'users', user.id);
+        await setDoc(userDocRef, { bookmarks: updated, updatedAt: Date.now() }, { merge: true });
+        setLastSynced(Date.now());
+      } catch (err) {
+        console.error('Failed to remove bookmark in Firestore:', err);
+      }
+    } else {
+      await syncNow();
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -521,6 +583,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginWithSyncCode,
         logout,
         syncNow,
+        clearHistoryAndSync,
+        removeHistoryItemAndSync,
+        removeBookmarkAndSync,
       }}
     >
       {children}

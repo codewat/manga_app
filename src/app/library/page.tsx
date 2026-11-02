@@ -19,14 +19,13 @@ import {
 import { BookmarkItem, HistoryItem, BookmarkCategory } from '@/types/manga';
 import {
   getBookmarks,
-  removeBookmark,
   getHistory,
-  removeHistoryItem,
-  clearHistory,
   detectProvider,
 } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
 
 function LibraryContent() {
+  const { clearHistoryAndSync, removeHistoryItemAndSync, removeBookmarkAndSync } = useAuth();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') === 'history' ? 'history' : 'bookmarks';
 
@@ -229,10 +228,10 @@ function LibraryContent() {
 
           {activeTab === 'history' && history.length > 0 && (
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (confirm('Are you sure you want to clear your reading history?')) {
-                  clearHistory();
                   setHistory([]);
+                  await clearHistoryAndSync();
                 }
               }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-950/30 border border-red-900/50 hover:bg-red-900/40 text-red-300 text-xs font-semibold transition"
@@ -331,7 +330,10 @@ function LibraryContent() {
                           )}
 
                           <button
-                            onClick={() => removeBookmark(b.mangaId)}
+                            onClick={async () => {
+                              setBookmarks((prev) => prev.filter((x) => x.mangaId !== b.mangaId));
+                              await removeBookmarkAndSync(b.mangaId);
+                            }}
                             title="Remove bookmark"
                             className="p-1 text-zinc-500 hover:text-red-400 rounded transition"
                           >
@@ -423,7 +425,10 @@ function LibraryContent() {
                         </Link>
 
                         <button
-                          onClick={() => removeHistoryItem(item.mangaId)}
+                          onClick={async () => {
+                            setHistory((prev) => prev.filter((h) => h.mangaId !== item.mangaId));
+                            await removeHistoryItemAndSync(item.mangaId);
+                          }}
                           title="Delete from history"
                           className="p-2 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition"
                         >

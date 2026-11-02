@@ -211,20 +211,46 @@ export default function MangaReader({
   };
 
   const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage((p) => p + 1);
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    } else if (nextChapter) {
-      navigateToChapter(nextChapter.id);
+    if (settings.mode === 'webtoon') {
+      if (currentPage < totalPages) {
+        const nextPage = currentPage + 1;
+        setCurrentPage(nextPage);
+        const images = document.querySelectorAll<HTMLImageElement>('.webtoon-page-img');
+        if (images[nextPage - 1]) {
+          images[nextPage - 1].scrollIntoView({ behavior: 'smooth' });
+        }
+      } else if (nextChapter) {
+        navigateToChapter(nextChapter.id);
+      }
+    } else {
+      if (currentPage < totalPages) {
+        setCurrentPage((p) => p + 1);
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      } else if (nextChapter) {
+        navigateToChapter(nextChapter.id);
+      }
     }
   };
 
   const handlePrevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage((p) => p - 1);
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    } else if (prevChapter) {
-      navigateToChapter(prevChapter.id);
+    if (settings.mode === 'webtoon') {
+      if (currentPage > 1) {
+        const prevPage = currentPage - 1;
+        setCurrentPage(prevPage);
+        const images = document.querySelectorAll<HTMLImageElement>('.webtoon-page-img');
+        if (images[prevPage - 1]) {
+          images[prevPage - 1].scrollIntoView({ behavior: 'smooth' });
+        }
+      } else if (prevChapter) {
+        navigateToChapter(prevChapter.id);
+      }
+    } else {
+      if (currentPage > 1) {
+        setCurrentPage((p) => p - 1);
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      } else if (prevChapter) {
+        navigateToChapter(prevChapter.id);
+      }
     }
   };
 
