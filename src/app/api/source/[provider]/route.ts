@@ -4,6 +4,7 @@ import {
   searchProviderManga,
   fetchProviderChapters,
   fetchProviderPages,
+  fetchProviderLatest,
 } from '@/lib/providers';
 
 export const runtime = 'nodejs';
@@ -18,6 +19,7 @@ export async function GET(
     const action = searchParams.get('action') || 'search';
 
     const validProviders: MangaProviderId[] = [
+      'mangadex',
       'weebcentral',
       'asura',
       'flame',
@@ -28,6 +30,11 @@ export async function GET(
     }
 
     const providerId = provider as MangaProviderId;
+
+    if (action === 'latest') {
+      const results = await fetchProviderLatest(providerId);
+      return NextResponse.json({ results });
+    }
 
     if (action === 'search') {
       const q = searchParams.get('q');

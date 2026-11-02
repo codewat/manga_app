@@ -511,3 +511,160 @@ export async function fetchProviderPages(
 
   return [];
 }
+
+export async function fetchProviderLatest(provider: MangaProviderId) {
+  // 1. MANGADEX
+  if (provider === 'mangadex') {
+    try {
+      const res = await fetch(
+        'https://api.mangadex.org/manga?limit=24&order[latestUploadedChapter]=desc&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive'
+      );
+      if (!res.ok) return [];
+      const json = await res.json();
+      const items: { id: string; title: string; image?: string }[] = [];
+      for (const item of json.data || []) {
+        const title =
+          item.attributes?.title?.en ||
+          Object.values(item.attributes?.title || {})[0] ||
+          'Unknown';
+        const coverRel = (item.relationships || []).find((r: any) => r.type === 'cover_art');
+        const fileName = coverRel?.attributes?.fileName;
+        const image = fileName
+          ? `https://uploads.mangadex.org/covers/${item.id}/${fileName}.256.jpg`
+          : undefined;
+        items.push({ id: item.id, title, image });
+      }
+      return items;
+    } catch {
+      return [];
+    }
+  }
+
+  // 2. ASURA SCANS
+  if (provider === 'asura') {
+    try {
+      const res = await fetch('https://asurascans.com/', {
+        headers: { 'User-Agent': BROWSER_UA },
+      });
+      if (!res.ok) return [];
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      const items: { id: string; title: string; image?: string }[] = [];
+
+      $('a[href*="/comics/"]').each((_, el) => {
+        const href = $(el).attr('href') || '';
+        if (href.includes('/chapter/')) return;
+        const slug = href.replace('/comics/', '').replace(/^\//, '').split('?')[0];
+        const title =
+          $(el).find('h3').text().trim() ||
+          $(el).find('img').attr('alt')?.trim() ||
+          '';
+        const image = $(el).find('img').attr('src') || $(el).find('img').attr('data-src');
+
+        if (slug && title && !items.some((i) => i.id === slug)) {
+          items.push({ id: slug, title, image });
+        }
+      });
+
+      return items.slice(0, 30);
+    } catch {
+      return [];
+    }
+  }
+
+  // 3. WEEBCENTRAL
+  if (provider === 'weebcentral') {
+    try {
+      const url =
+        'https://weebcentral.com/search/data?limit=24&offset=0&sort=Latest+Updates&order=Descending&display_mode=Full+Display';
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': BROWSER_UA,
+          'HX-Request': 'true',
+          'HX-Current-URL': 'https://weebcentral.com/search',
+        },
+      });
+
+      if (!res.ok) return [];
+
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      const items: { id: string; title: string; image?: string }[] = [];
+
+      $('article.bg-base-300').each((_, el) => {
+        const link = $(el).find('section a').first();
+        const href = link.attr('href') || '';
+        const id = href.split('/series/')[1] || '';
+        const title =
+          $(el).find('section a .text-ellipsis').text().trim() ||
+          $(el).find('section a').text().trim();
+        const image =
+          $(el).find('picture source').first().attr('srcset') ||
+          $(el).find('picture img').attr('src');
+
+        if (id && title) {
+          items.push({ id, title, image });
+        }
+      });
+
+      return items;
+    } catch {
+      return [];
+    }
+  }
+
+  // 4. MANGAPILL
+  if (provider === 'mangapill') {
+    try {
+      const res = await fetch('https://mangapill.com/', {
+        headers: { 'User-Agent': BROWSER_UA },
+      });
+
+      if (!res.ok) return [];
+
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      const items: { id: string; title: string; image?: string }[] = [];
+
+      $('div.grid > div').each((_, el) => {
+        const link = $(el).find('a').first().attr('href') || '';
+        if (!link.includes('/manga/')) return;
+        const id = link.replace('/manga/', '').split('?')[0];
+        const title =
+          $(el).find('.line-clamp-2').text().trim() ||
+          $(el).find('h3, a').text().trim();
+        const image = $(el).find('img').attr('data-src') || $(el).find('img').attr('src');
+
+        if (id && title && !items.some((i) => i.id === id)) {
+          items.push({ id, title, image });
+        }
+      });
+
+      return items;
+    } catch {
+      return [];
+    }
+  }
+
+  // 5. FLAME COMICS
+  if (provider === 'flame') {
+    try {
+      const res = await fetch('https://flamecomics.xyz/api/series', {
+        headers: { 'User-Agent': BROWSER_UA },
+      });
+
+      if (!res.ok) return [];
+
+      const list: any[] = await res.json();
+      return list.slice(0, 24).map((m) => ({
+        id: String(m.id),
+        title: m.label,
+        image: `https://cdn.flamecomics.xyz/uploads/images/series/${m.id}/${m.image}`,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
