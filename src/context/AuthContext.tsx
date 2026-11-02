@@ -13,6 +13,8 @@ import { auth, db, isFirebaseConfigured } from '@/lib/firebase';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as fbSignOut,
   onAuthStateChanged,
   User as FirebaseUser,
@@ -43,6 +45,7 @@ interface AuthContextType {
   isFirebaseActive: boolean;
   login: (usernameOrEmail: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (usernameOrEmail: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   loginWithSyncCode: (code: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   syncNow: () => Promise<void>;
@@ -119,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
         if (fbUser) {
           const email = fbUser.email || '';
-          const uname = extractUsername(email);
+          const uname = fbUser.displayName || extractUsername(email);
           const syncCode = fbUser.uid.slice(0, 6).toUpperCase();
 
           setUser({
@@ -364,6 +367,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    if (!isFirebaseConfigured || !auth) {
+      return {
+        success: false,
+        error: 'Firebase is not yet configured. Please add Firebase keys in Vercel Environment Variables first.',
+      };
+    }
+
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const cred = await signInWithPopup(auth, provider);
+      const email = cred.user.email || '';
+      const uname = cred.user.displayName || extractUsername(email);
+      const syncCode = cred.user.uid.slice(0, 6).toUpperCase();
+
+      setUser({
+        id: cred.user.uid,
+        email,
+        username: uname,
+        syncCode,
+        isFirebase: true,
+      });
+
+      if (db) {
+        const userDocRef = doc(db, 'users', cred.user.uid);
+        const snap = await getDoc(userDocRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          mergeCloudToLocal(data.bookmarks || [], data.history || []);
+          setLastSynced(data.updatedAt || Date.now());
+        } else {
+          await setDoc(userDocRef, {
+            username: uname,
+            email,
+            bookmarks: getBookmarks(),
+            history: getHistory(),
+            settings: getReaderSettings(),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+        await pushLocalToFirestore(cred.user.uid);
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user') {
+        return { success: false, error: 'Sign in cancelled' };
+      }
+      if (err.code === 'auth/unauthorized-domain') {
+        return {
+          success: false,
+          error: 'Vercel domain is not authorized in Firebase! In Firebase Console -> Authentication -> Settings -> Authorized domains, add your Vercel domain.',
+        };
+      }
+      if (err.code === 'auth/operation-not-allowed') {
+        return {
+          success: false,
+          error: 'Google sign-in is not enabled in Firebase! In Firebase Console -> Authentication -> Sign-in method, click Google and turn on Enable.',
+        };
+      }
+      return { success: false, error: err.message || 'Google sign-in failed' };
+    }
+  };
+
   const loginWithSyncCode = async (syncCode: string) => {
     try {
       const res = await fetch('/api/sync/code', {
@@ -448,6 +517,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isFirebaseActive: isFirebaseConfigured,
         login,
         register,
+        signInWithGoogle,
         loginWithSyncCode,
         logout,
         syncNow,
