@@ -7,3 +7,4 @@ export async function POST() {
   response.cookies.delete('mangaverse_auth_token');
   return response;
 }
+

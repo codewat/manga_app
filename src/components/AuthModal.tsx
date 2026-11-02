@@ -10,7 +10,7 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const { login, register, loginWithSyncCode } = useAuth();
+  const { login, register, loginWithSyncCode, isFirebaseActive } = useAuth();
   const [tab, setTab] = useState<'login' | 'register' | 'code'>('login');
 
   const [username, setUsername] = useState('');
@@ -80,6 +80,19 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <p className="text-xs text-zinc-400 mt-1">
             Access your bookmarks & reading history from any phone, tablet, or PC!
           </p>
+          <div className="mt-2.5">
+            {isFirebaseActive ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-[11px] font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Firebase Cloud Sync Active
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-950/60 border border-amber-800/80 text-amber-300 text-[11px] font-medium">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                Local Mode (Connect Firebase in Vercel to sync across devices)
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Tab switch */}
@@ -166,12 +179,18 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <input
                     type="password"
                     required
+                    minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="At least 6 characters"
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition"
                   />
                 </div>
+                {tab === 'register' && (
+                  <p className="text-[11px] text-zinc-500 mt-1">
+                    At least 6 characters. Use the same username and password on your other devices to sync!
+                  </p>
+                )}
               </div>
             </>
           ) : (
@@ -217,3 +236,4 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     </div>
   );
 }
+

@@ -45,3 +45,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: err.message || 'Sync failed' }, { status: 500 });
   }
 }
+

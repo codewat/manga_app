@@ -171,7 +171,7 @@ export default function Navbar() {
                             <p className="text-xs font-bold text-white">@{user.username}</p>
                             <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              Cloud Synced
+                              {user.isFirebase ? 'Firebase Synced' : 'Local Synced'}
                             </span>
                           </div>
                         </div>
