@@ -201,6 +201,7 @@ export default function HomeContent() {
     let isCancelled = false;
     async function loadLatest() {
       setLoadingLatest(true);
+      setLatestItems([]);
       try {
         const res = await fetch(`/api/source/${selectedSource}?action=latest`);
         if (res.ok) {
@@ -208,11 +209,16 @@ export default function HomeContent() {
           if (!isCancelled) {
             const list = data.results || [];
             setLatestItems(list);
-            setLatestCache((prev) => ({ ...prev, [selectedSource]: list }));
+            if (list.length > 0) {
+              setLatestCache((prev) => ({ ...prev, [selectedSource]: list }));
+            }
           }
+        } else if (!isCancelled) {
+          setLatestItems([]);
         }
       } catch (err) {
         console.error('Failed to load latest updates:', err);
+        if (!isCancelled) setLatestItems([]);
       } finally {
         if (!isCancelled) setLoadingLatest(false);
       }
@@ -236,6 +242,7 @@ export default function HomeContent() {
     let isCancelled = false;
     async function loadTrending() {
       setLoadingTrending(true);
+      setTrendingItems([]);
       try {
         const res = await fetch(`/api/source/${selectedTrendingSource}?action=trending`);
         if (res.ok) {
@@ -243,11 +250,16 @@ export default function HomeContent() {
           if (!isCancelled) {
             const list = data.results || [];
             setTrendingItems(list);
-            setTrendingCache((prev) => ({ ...prev, [selectedTrendingSource]: list }));
+            if (list.length > 0) {
+              setTrendingCache((prev) => ({ ...prev, [selectedTrendingSource]: list }));
+            }
           }
+        } else if (!isCancelled) {
+          setTrendingItems([]);
         }
       } catch (err) {
         console.error('Failed to load trending items:', err);
+        if (!isCancelled) setTrendingItems([]);
       } finally {
         if (!isCancelled) setLoadingTrending(false);
       }

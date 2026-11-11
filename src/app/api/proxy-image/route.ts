@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     // Determine appropriate referer
     let referer = 'https://mangadex.org/';
-    if (host.includes('asurascans') || host.includes('asura')) {
+    if (host.includes('asurascans') || host.includes('asuracomic') || host.includes('asura')) {
       referer = 'https://asurascans.com/';
     } else if (host.includes('flamecomics')) {
       referer = 'https://flamecomics.xyz/';
@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
     const response = await fetch(imageUrl, {
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
         Referer: referer,
       },
     });

@@ -5,7 +5,79 @@ import { MangaProviderId } from '@/types/providers';
 export * from '@/types/providers';
 
 const BROWSER_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+const ASURA_API_BASE = 'https://api.asurascans.com/api';
+const ASURA_WEB_BASE = 'https://asurascans.com';
+
+const ASURA_API_HEADERS: Record<string, string> = {
+  'User-Agent': BROWSER_UA,
+  Accept: 'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Origin: ASURA_WEB_BASE,
+  Referer: `${ASURA_WEB_BASE}/`,
+};
+
+const ASURA_HTML_HEADERS: Record<string, string> = {
+  'User-Agent': BROWSER_UA,
+  Accept:
+    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Referer: `${ASURA_WEB_BASE}/`,
+};
+
+function cleanAsuraSlug(raw: string): string {
+  return raw
+    .replace(/^asura:/i, '')
+    .replace(/^https?:\/\/[^/]+\/comics\//i, '')
+    .replace(/^\/?comics\//i, '')
+    .split('?')[0]
+    .split('#')[0]
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')[0];
+}
+
+function getAsuraCandidateSlugs(rawSlug: string): string[] {
+  const clean = cleanAsuraSlug(rawSlug);
+  const base = clean.replace(/-[0-9a-f]{8}$/i, '');
+  return base && base !== clean ? [clean, base] : [clean];
+}
+
+function getAsuraSeriesId(series: { slug?: string; public_url?: string }): string {
+  if (series.public_url) {
+    const cleaned = cleanAsuraSlug(series.public_url);
+    if (cleaned) return cleaned;
+  }
+  return cleanAsuraSlug(series.slug || '');
+}
+
+function parseAsuraSeriesHtml(html: string): { id: string; title: string; image?: string }[] {
+  const $ = cheerio.load(html);
+  const byId = new Map<string, { id: string; title: string; image?: string }>();
+
+  $('a[href*="/comics/"]').each((_, el) => {
+    const href = $(el).attr('href') || '';
+    if (href.includes('/chapter/')) return;
+    const slug = cleanAsuraSlug(href);
+    if (!slug) return;
+
+    const title =
+      $(el).find('h3').text().trim() ||
+      $(el).find('img').attr('alt')?.trim() ||
+      '';
+    const image = $(el).find('img').attr('src') || $(el).find('img').attr('data-src');
+
+    const existing = byId.get(slug);
+    if (existing) {
+      if (!existing.title && title) existing.title = title;
+      if (!existing.image && image) existing.image = image;
+    } else if (title || image) {
+      byId.set(slug, { id: slug, title, image });
+    }
+  });
+
+  return Array.from(byId.values()).filter((item) => Boolean(item.id && item.title));
+}
 
 export async function searchProviderManga(provider: MangaProviderId, title: string) {
   if (provider === 'mangadex') return [];
@@ -58,33 +130,38 @@ export async function searchProviderManga(provider: MangaProviderId, title: stri
   // 2. ASURA SCANS
   if (provider === 'asura') {
     try {
-      const url = `https://asurascans.com/browse/comics?q=${encodeURIComponent(title)}`;
+      const apiUrl = `${ASURA_API_BASE}/series?search=${encodeURIComponent(title)}&limit=30`;
+      const apiRes = await fetch(apiUrl, {
+        headers: ASURA_API_HEADERS,
+        cache: 'no-store',
+      });
+
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        const items: { id: string; title: string; image?: string }[] = [];
+        for (const s of json?.data || []) {
+          if (s.type === 'novel') continue;
+          const id = getAsuraSeriesId(s);
+          const sTitle = String(s.title || '').trim();
+          const image = s.cover || s.cover_url || undefined;
+          if (id && sTitle && !items.some((i) => i.id === id)) {
+            items.push({ id, title: sTitle, image });
+          }
+        }
+        return items;
+      }
+
+      // HTML fallback
+      const url = `${ASURA_WEB_BASE}/browse/comics?q=${encodeURIComponent(title)}`;
       const res = await fetch(url, {
-        headers: { 'User-Agent': BROWSER_UA },
+        headers: ASURA_HTML_HEADERS,
+        cache: 'no-store',
       });
 
       if (!res.ok) return [];
 
       const html = await res.text();
-      const $ = cheerio.load(html);
-      const items: { id: string; title: string; image?: string }[] = [];
-
-      $('a[href*="/comics/"]').each((_, el) => {
-        const href = $(el).attr('href') || '';
-        if (href.includes('/chapter/')) return;
-        const slug = href.replace('/comics/', '').replace(/^\//, '').split('?')[0];
-        const seriesTitle =
-          $(el).find('h3').text().trim() ||
-          $(el).find('img').attr('alt')?.trim() ||
-          '';
-        const image = $(el).find('img').attr('src') || $(el).find('img').attr('data-src');
-
-        if (slug && seriesTitle && !items.some((i) => i.id === slug)) {
-          items.push({ id: slug, title: seriesTitle, image });
-        }
-      });
-
-      return items;
+      return parseAsuraSeriesHtml(html);
     } catch (err) {
       console.error('Error searching Asura Scans:', err);
       return [];
@@ -223,11 +300,64 @@ export async function fetchProviderChapters(
   // 2. ASURA SCANS
   if (provider === 'asura') {
     try {
-      const cleanSlug = sourceMangaId.split('/')[0];
-      const url = `https://asurascans.com/comics/${cleanSlug}`;
+      const cleanSlug = cleanAsuraSlug(sourceMangaId);
+      if (!cleanSlug) return [];
 
+      const candidateSlugs = getAsuraCandidateSlugs(cleanSlug);
+      for (const candidateSlug of candidateSlugs) {
+        const apiUrl = `${ASURA_API_BASE}/series/${encodeURIComponent(candidateSlug)}/chapters`;
+        const apiRes = await fetch(apiUrl, {
+          headers: ASURA_API_HEADERS,
+          cache: 'no-store',
+        });
+
+        if (apiRes.ok) {
+          const json = await apiRes.json();
+          const list = Array.isArray(json?.data) ? json.data : [];
+          if (list.length > 0 || candidateSlug === candidateSlugs[candidateSlugs.length - 1]) {
+            const now = Date.now();
+            const chapters: ChapterItem[] = [];
+            const seenIds = new Set<string>();
+
+            for (const ch of list) {
+              const earlyAccessMs = ch.early_access_until
+                ? Date.parse(ch.early_access_until)
+                : NaN;
+              const isLockedEarlyAccess =
+                Boolean(ch.is_premium) && (Number.isNaN(earlyAccessMs) || earlyAccessMs > now);
+              if (isLockedEarlyAccess) continue;
+
+              const chapNum =
+                ch.number !== undefined && ch.number !== null
+                  ? String(ch.number)
+                  : String(ch.slug || '0').replace(/^chapter-/i, '');
+
+              const id = `${cleanSlug}::chapter::${chapNum}`;
+              if (seenIds.has(id)) continue;
+              seenIds.add(id);
+
+              chapters.push({
+                id,
+                chapter: chapNum,
+                volume: null,
+                title: `Chapter ${chapNum}`,
+                translatedLanguage: 'en',
+                publishAt: ch.published_at || ch.created_at || '',
+                pages: typeof ch.page_count === 'number' ? ch.page_count : 0,
+                scanlationGroup: 'ASURA SCANS',
+              });
+            }
+
+            return chapters;
+          }
+        }
+      }
+
+      // HTML fallback
+      const url = `${ASURA_WEB_BASE}/comics/${cleanSlug}`;
       const res = await fetch(url, {
-        headers: { 'User-Agent': BROWSER_UA },
+        headers: ASURA_HTML_HEADERS,
+        cache: 'no-store',
       });
 
       if (!res.ok) return [];
@@ -423,12 +553,49 @@ export async function fetchProviderPages(
   if (provider === 'asura') {
     try {
       const parts = chapterId.split('::chapter::');
-      const slug = parts[0];
-      const chapNum = parts[1] || '1';
+      const rawSlug = parts[0] || '';
+      const rawChap = parts[1] || '1';
+      const chapNum = rawChap.replace(/^chapter-/i, '');
+      const slugCandidates = getAsuraCandidateSlugs(rawSlug).filter(Boolean);
+      const chapCandidates = Array.from(
+        new Set([chapNum, rawChap, `chapter-${chapNum}`].filter(Boolean))
+      );
 
-      const url = `https://asurascans.com/comics/${slug}/chapter/${chapNum}`;
+      for (const candidateSlug of slugCandidates) {
+        for (const candidateChap of chapCandidates) {
+          const apiUrl = `${ASURA_API_BASE}/series/${encodeURIComponent(
+            candidateSlug
+          )}/chapters/${encodeURIComponent(candidateChap)}`;
+          const apiRes = await fetch(apiUrl, {
+            headers: ASURA_API_HEADERS,
+            cache: 'no-store',
+          });
+
+          if (!apiRes.ok) continue;
+
+          const json = await apiRes.json();
+          const chapterObj = json?.data?.chapter;
+          const pageItems = chapterObj?.pages;
+          if (Array.isArray(pageItems) && pageItems.length > 0) {
+            return pageItems
+              .map((p: any) => (typeof p === 'string' ? p : p?.url || ''))
+              .filter(Boolean);
+          }
+
+          // Early access locked chapter: no public pages yet
+          if (chapterObj?.is_premium) {
+            return [];
+          }
+        }
+      }
+
+      // HTML fallback
+      const fallbackSlug = slugCandidates[0];
+      if (!fallbackSlug) return [];
+      const url = `${ASURA_WEB_BASE}/comics/${fallbackSlug}/chapter/${encodeURIComponent(chapNum)}`;
       const res = await fetch(url, {
-        headers: { 'User-Agent': BROWSER_UA },
+        headers: ASURA_HTML_HEADERS,
+        cache: 'no-store',
       });
 
       if (!res.ok) return [];
@@ -557,30 +724,40 @@ export async function fetchProviderLatest(provider: MangaProviderId) {
   // 2. ASURA SCANS
   if (provider === 'asura') {
     try {
-      const res = await fetch('https://asurascans.com/', {
-        headers: { 'User-Agent': BROWSER_UA },
+      const apiRes = await fetch(`${ASURA_API_BASE}/series?sort=latest&page=1&limit=30`, {
+        headers: ASURA_API_HEADERS,
+        cache: 'no-store',
+      });
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        const rawList = Array.isArray(json?.data) ? [...json.data] : [];
+        rawList.sort((a: any, b: any) => {
+          const ta = Date.parse(a?.last_chapter_at || a?.updated_at || '') || 0;
+          const tb = Date.parse(b?.last_chapter_at || b?.updated_at || '') || 0;
+          return tb - ta;
+        });
+
+        const items: { id: string; title: string; image?: string }[] = [];
+        for (const s of rawList) {
+          if (s.type === 'novel') continue;
+          const id = getAsuraSeriesId(s);
+          const title = String(s.title || '').trim();
+          const image = s.cover || s.cover_url || undefined;
+          if (id && title && !items.some((i) => i.id === id)) {
+            items.push({ id, title, image });
+          }
+        }
+        if (items.length > 0) return items.slice(0, 30);
+      }
+
+      // HTML fallback
+      const res = await fetch(`${ASURA_WEB_BASE}/`, {
+        headers: ASURA_HTML_HEADERS,
+        cache: 'no-store',
       });
       if (!res.ok) return [];
       const html = await res.text();
-      const $ = cheerio.load(html);
-      const items: { id: string; title: string; image?: string }[] = [];
-
-      $('a[href*="/comics/"]').each((_, el) => {
-        const href = $(el).attr('href') || '';
-        if (href.includes('/chapter/')) return;
-        const slug = href.replace('/comics/', '').replace(/^\//, '').split('?')[0];
-        const title =
-          $(el).find('h3').text().trim() ||
-          $(el).find('img').attr('alt')?.trim() ||
-          '';
-        const image = $(el).find('img').attr('src') || $(el).find('img').attr('data-src');
-
-        if (slug && title && !items.some((i) => i.id === slug)) {
-          items.push({ id: slug, title, image });
-        }
-      });
-
-      return items.slice(0, 30);
+      return parseAsuraSeriesHtml(html).slice(0, 30);
     } catch {
       return [];
     }
@@ -687,30 +864,33 @@ export async function fetchProviderTrending(provider: MangaProviderId) {
   // 1. ASURA SCANS
   if (provider === 'asura') {
     try {
-      const res = await fetch('https://asurascans.com/comics?order=popular', {
-        headers: { 'User-Agent': BROWSER_UA },
+      const apiRes = await fetch(`${ASURA_API_BASE}/series?sort=popular&page=1&limit=30`, {
+        headers: ASURA_API_HEADERS,
+        cache: 'no-store',
+      });
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        const items: { id: string; title: string; image?: string }[] = [];
+        for (const s of json?.data || []) {
+          if (s.type === 'novel') continue;
+          const id = getAsuraSeriesId(s);
+          const title = String(s.title || '').trim();
+          const image = s.cover || s.cover_url || undefined;
+          if (id && title && !items.some((i) => i.id === id)) {
+            items.push({ id, title, image });
+          }
+        }
+        if (items.length > 0) return items.slice(0, 30);
+      }
+
+      // HTML fallback
+      const res = await fetch(`${ASURA_WEB_BASE}/browse?sort=popular`, {
+        headers: ASURA_HTML_HEADERS,
+        cache: 'no-store',
       });
       if (!res.ok) return [];
       const html = await res.text();
-      const $ = cheerio.load(html);
-      const items: { id: string; title: string; image?: string }[] = [];
-
-      $('a[href*="/comics/"]').each((_, el) => {
-        const href = $(el).attr('href') || '';
-        if (href.includes('/chapter/')) return;
-        const slug = href.replace('/comics/', '').replace(/^\//, '').split('?')[0];
-        const title =
-          $(el).find('h3').text().trim() ||
-          $(el).find('img').attr('alt')?.trim() ||
-          $(el).text().trim();
-        const image = $(el).find('img').attr('src') || $(el).find('img').attr('data-src');
-
-        if (slug && title && !items.some((i) => i.id === slug)) {
-          items.push({ id: slug, title, image });
-        }
-      });
-
-      return items.slice(0, 30);
+      return parseAsuraSeriesHtml(html).slice(0, 30);
     } catch {
       return [];
     }
